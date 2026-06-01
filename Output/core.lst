@@ -1,0 +1,350 @@
+
+
+
+ARM Macro Assembler    Page 1 
+
+
+    1 00000000         
+    2 00000000 E000ED04 
+                       NVIC_INT_CTRL
+                               EQU              0xE000ED04  ; 中断控制寄�
+                                                            �器
+    3 00000000 E000ED22 
+                       NVIC_SYSPRI14
+                               EQU              0xE000ED22  ; 系统优先级�
+                                                            �存器(优先级14
+                                                            ).
+    4 00000000 000000FF 
+                       NVIC_PENDSV_PRI
+                               EQU              0xFF        ; PendSV优先级(�
+                                                            ��低).
+    5 00000000 10000000 
+                       NVIC_PENDSVSET
+                               EQU              0x10000000  ; PendSV触发值
+    6 00000000         
+    7 00000000                 PRESERVE8                    ;8字节对齐？
+    8 00000000                 THUMB
+    9 00000000         
+   10 00000000                 AREA             CODE, CODE, READONLY
+   11 00000000         
+   12 00000000                 EXTERN           CPU_ExceptStkBase ;主堆栈
+   13 00000000         
+   14 00000000                 EXTERN           p_TCB_Cur   ;指向TCB的的指
+                                                            针
+   15 00000000                 EXTERN           p_TCBHightRdy ;指向最高优�
+                                                            ��级任务的指�
+                                                            �
+   16 00000000         
+   17 00000000                 EXPORT           OSStartHighRdy
+   18 00000000                 EXPORT           PendSV_Handler ;PendSV异常处
+                                                            理函数
+   19 00000000                 EXPORT           OSCtxSw
+   20 00000000                 EXPORT           OS_CPU_SR_Save
+   21 00000000                 EXPORT           OS_CPU_SR_Restore
+   22 00000000         
+   23 00000000         OS_CPU_SR_Save                       ;PRIMASK   这是�
+                                                            �只有单一比特
+                                                            的寄存器。在�
+                                                            ��被置1后，就�
+                                                            ��掉所有可屏�
+                                                            �的异常，只剩
+                                                            下NMI和硬fault�
+                                                            �以响应。它的
+                                                            缺省值是0，表
+                                                            示没有关中断
+   24 00000000 F3EF 8010       MRS              R0, PRIMASK ;读取PRIMASK到R0
+                                                            ,R0为返回值 
+   25 00000004 B672            CPSID            I           ;PRIMASK=1,关中�
+                                                            �(NMI和硬件FAULT
+                                                            可以响应)
+   26 00000006 4770            BX               LR          ;返回
+   27 00000008         
+   28 00000008         OS_CPU_SR_Restore
+   29 00000008 F380 8810       MSR              PRIMASK, R0 ;读取R0到PRIMASK
+                                                            中,R0为参数
+   30 0000000C 4770            BX               LR          ;返回
+
+
+
+ARM Macro Assembler    Page 2 
+
+
+   31 0000000E         
+   32 0000000E         OSCtxSw
+   33 0000000E 4816            LDR              R0,=NVIC_INT_CTRL
+   34 00000010 F04F 5180       LDR              R1,=NVIC_PENDSVSET
+   35 00000014 6001            STR              R1,[R0]     ;触发PendSV
+   36 00000016 4770            BX               LR
+   37 00000018         
+   38 00000018         OSStartHighRdy                       ; 设置PendSV的�
+                                                            �常中断优先级
+                                                            
+   39 00000018 4814            LDR              R0,=NVIC_SYSPRI14
+   40 0000001A F04F 01FF       LDR              R1,=NVIC_PENDSV_PRI
+   41 0000001E 7001            STRB             R1,[R0]
+   42 00000020         
+   43 00000020 2000            MOVS             R0,#0       ;任务堆栈设置
+                                                            为0
+   44 00000022 F380 8809       MSR              PSP,R0      ;PSP清零，作为
+                                                            首次上下文切�
+                                                            ��的标志
+   45 00000026         
+   46 00000026 4812            LDR              R0,=CPU_ExceptStkBase ;初始�
+                                                            �堆栈为CPU_Excep
+                                                            tStkBase
+   47 00000028 6801            LDR              R1,[R0]     ;R1的数据+R2的�
+                                                            ��据合成一个�
+                                                            �址值，该地址
+                                                            中存放的数据�
+                                                            ��值给R0
+   48 0000002A F381 8808       MSR              MSP,R1      ;将MSP设为我们
+                                                            为其分配的内�
+                                                            ��地址CPU_ExceptS
+                                                            tkBase
+   49 0000002E         
+   50 0000002E 480E            LDR              R0,=NVIC_INT_CTRL
+   51 00000030 F04F 5180       LDR              R1,=NVIC_PENDSVSET
+   52 00000034 6001            STR              R1,[R0]     ; 触发PendSV异�
+                                                            �
+   53 00000036         
+   54 00000036 B662            CPSIE            I           ;开启中断
+   55 00000038         
+   56 00000038         
+   57 00000038         
+   58 00000038         
+   59 00000038         
+   60 00000038         
+   61 00000038         PendSV_Handler
+   62 00000038 B672            CPSID            I           ; 关中断
+   63 0000003A F3EF 8009       MRS              R0,PSP      ;把PSP指针的值
+                                                            赋给R0
+   64 0000003E B128            CBZ              R0,OS_CPU_PendSV_Handler_nosave
+ 
+                                                            ;如果PSP为0调�
+                                                            �OS_CPU_PendSV_Hand
+                                                            ler_nosave
+   65 00000040         
+   66 00000040 3820            SUBS             R0,R0,#0x20
+   67 00000042 E880 0FF0       STM              R0,{R4-R11} ; 入栈R4-R11
+   68 00000046         
+   69 00000046 490B            LDR              R1,=p_TCB_Cur ;在这里我们�
+
+
+
+ARM Macro Assembler    Page 3 
+
+
+                                                            ��栈了很多寄�
+                                                            �器  ;当前任务
+                                                            的指针
+   70 00000048 6809            LDR              R1,[R1]     ;这三句让p_TCB_
+                                                            Cur->StkPtr指向�
+                                                            �的栈顶
+   71 0000004A 6008            STR              R0,[R1]     ;即p_TCB_Cur->StkP
+                                                            tr=SP
+   72 0000004C         
+   73 0000004C         OS_CPU_PendSV_Handler_nosave
+   74 0000004C 4809            LDR              R0,=p_TCB_Cur ;p_TCB_Cur=p_TCBH
+                                                            ightRdy
+   75 0000004E 490A            LDR              R1,=p_TCBHightRdy
+   76 00000050 680A            LDR              R2,[R1]
+   77 00000052 6002            STR              R2,[R0]     ;将R2的值写入�
+                                                            ��【R0】的地址
+                                                            中
+   78 00000054         
+   79 00000054 6810            LDR              R0,[R2]     ;将新的栈顶给
+                                                            SP,SP=p_TCB_Cur->St
+                                                            kPtr
+   80 00000056         
+   81 00000056 E890 0FF0       LDM              R0,{R4-R11} ; 弹出R4-R11
+   82 0000005A 3020            ADDS             R0,R0,#0x20
+   83 0000005C         
+   84 0000005C F380 8809       MSR              PSP,R0      ;更新PSP;有两�
+                                                            �堆栈寄存器，
+                                                            主堆栈指针（M
+                                                            SP）与进程堆�
+                                                            �指针（PSP），
+                                                            而且任一时刻�
+                                                            ��能使用其中�
+                                                            �一个。MSP为复
+                                                            位后缺省使用�
+                                                            ��堆栈指针，�
+                                                            �常永远使用MSP
+                                                            ，如果手动开�
+                                                            ��PSP，那么线�
+                                                            �使用PSP，否则
+                                                            也使用MSP。怎�
+                                                            ��开启PSP？
+   85 00000060 F04E 0E04       ORR              LR,LR,#0x04 ;置LR的位2为1�
+                                                            �那么异常返回
+                                                            后，线程使用P
+                                                            SP
+   86 00000064         
+   87 00000064 B662            CPSIE            I           ;开中断
+   88 00000066         ;通常一个函数调用另一个函数时会使用BL�
+                       �令，这个指令会把当前的PC放到LR寄存器
+   89 00000066 4770            BX               LR          ;把LR寄存器的�
+                                                            ��容复制到PC寄
+                                                            存器里 ，从而
+                                                            实现函数的返�
+                                                            ��
+   90 00000068         ;在中断出现时，LR寄存器会设为一个特殊�
+                       �值（函数返回地址），而不是中断之前的P
+                       C寄存器内容，这样，当中断函数使用BX LR�
+                       �令返回时 ，CPU就能够知道是中断函数返回
+                       了
+
+
+
+ARM Macro Assembler    Page 4 
+
+
+   91 00000068         
+   92 00000068                 END
+              E000ED04 
+              E000ED22 
+              00000000 
+              00000000 
+              00000000 
+Command Line: --debug --xref --diag_suppress=9931 --cpu=Cortex-M4.fp --apcs=int
+erwork --depend=.\output\core.d -o.\output\core.o -I.\RTE\__04_OS -ID:\keil5\AR
+M\PACK\Keil\STM32F4xx_DFP\1.0.8\Device\Include -ID:\keil5\ARM\CMSIS\Include --p
+redefine="__UVISION_VERSION SETA 524" --predefine="STM32F40_41xxx SETA 1" --lis
+t=.\output\core.lst _05_Os\core.asm
+
+
+
+ARM Macro Assembler    Page 1 Alphabetic symbol ordering
+Relocatable symbols
+
+CODE 00000000
+
+Symbol: CODE
+   Definitions
+      At line 10 in file _05_Os\core.asm
+   Uses
+      None
+Comment: CODE unused
+OSCtxSw 0000000E
+
+Symbol: OSCtxSw
+   Definitions
+      At line 32 in file _05_Os\core.asm
+   Uses
+      At line 19 in file _05_Os\core.asm
+Comment: OSCtxSw used once
+OSStartHighRdy 00000018
+
+Symbol: OSStartHighRdy
+   Definitions
+      At line 38 in file _05_Os\core.asm
+   Uses
+      At line 17 in file _05_Os\core.asm
+Comment: OSStartHighRdy used once
+OS_CPU_PendSV_Handler_nosave 0000004C
+
+Symbol: OS_CPU_PendSV_Handler_nosave
+   Definitions
+      At line 73 in file _05_Os\core.asm
+   Uses
+      At line 64 in file _05_Os\core.asm
+Comment: OS_CPU_PendSV_Handler_nosave used once
+OS_CPU_SR_Restore 00000008
+
+Symbol: OS_CPU_SR_Restore
+   Definitions
+      At line 28 in file _05_Os\core.asm
+   Uses
+      At line 21 in file _05_Os\core.asm
+Comment: OS_CPU_SR_Restore used once
+OS_CPU_SR_Save 00000000
+
+Symbol: OS_CPU_SR_Save
+   Definitions
+      At line 23 in file _05_Os\core.asm
+   Uses
+      At line 20 in file _05_Os\core.asm
+Comment: OS_CPU_SR_Save used once
+PendSV_Handler 00000038
+
+Symbol: PendSV_Handler
+   Definitions
+      At line 61 in file _05_Os\core.asm
+   Uses
+      At line 18 in file _05_Os\core.asm
+Comment: PendSV_Handler used once
+7 symbols
+
+
+
+ARM Macro Assembler    Page 1 Alphabetic symbol ordering
+Absolute symbols
+
+NVIC_INT_CTRL E000ED04
+
+Symbol: NVIC_INT_CTRL
+   Definitions
+      At line 2 in file _05_Os\core.asm
+   Uses
+      At line 33 in file _05_Os\core.asm
+      At line 50 in file _05_Os\core.asm
+
+NVIC_PENDSVSET 10000000
+
+Symbol: NVIC_PENDSVSET
+   Definitions
+      At line 5 in file _05_Os\core.asm
+   Uses
+      At line 34 in file _05_Os\core.asm
+      At line 51 in file _05_Os\core.asm
+
+NVIC_PENDSV_PRI 000000FF
+
+Symbol: NVIC_PENDSV_PRI
+   Definitions
+      At line 4 in file _05_Os\core.asm
+   Uses
+      At line 40 in file _05_Os\core.asm
+Comment: NVIC_PENDSV_PRI used once
+NVIC_SYSPRI14 E000ED22
+
+Symbol: NVIC_SYSPRI14
+   Definitions
+      At line 3 in file _05_Os\core.asm
+   Uses
+      At line 39 in file _05_Os\core.asm
+Comment: NVIC_SYSPRI14 used once
+4 symbols
+
+
+
+ARM Macro Assembler    Page 1 Alphabetic symbol ordering
+External symbols
+
+CPU_ExceptStkBase 00000000
+
+Symbol: CPU_ExceptStkBase
+   Definitions
+      At line 12 in file _05_Os\core.asm
+   Uses
+      At line 46 in file _05_Os\core.asm
+Comment: CPU_ExceptStkBase used once
+p_TCBHightRdy 00000000
+
+Symbol: p_TCBHightRdy
+   Definitions
+      At line 15 in file _05_Os\core.asm
+   Uses
+      At line 75 in file _05_Os\core.asm
+Comment: p_TCBHightRdy used once
+p_TCB_Cur 00000000
+
+Symbol: p_TCB_Cur
+   Definitions
+      At line 14 in file _05_Os\core.asm
+   Uses
+      At line 69 in file _05_Os\core.asm
+      At line 74 in file _05_Os\core.asm
+
+3 symbols
+349 symbols in table
