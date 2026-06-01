@@ -3,7 +3,7 @@
 <title>Static Call Graph - [.\Output\_04.axf]</title></head>
 <body><HR>
 <H1>Static Call Graph for image .\Output\_04.axf</H1><HR>
-<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 5060528: Last Updated: Mon Jun 01 21:55:44 2026
+<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 5060528: Last Updated: Mon Jun 01 22:15:26 2026
 <BR><P>
 <H3>Maximum Stack Usage =        632 bytes + Unknown(Functions without stacksize, Cycles, Untraceable Function Pointers)</H3><H3>
 Call chain for Maximum Stack Depth:</H3>
@@ -1066,11 +1066,11 @@ Global Symbols
 </UL>
 
 <P><STRONG><a name="[c8]"></a>LCD_CtrlLinesConfig</STRONG> (Thumb, 322 bytes, Stack size 16 bytes, tft_lcd.o(i.LCD_CtrlLinesConfig))
-<BR><BR>[Stack]<UL><LI>Max Depth = 36<LI>Call Chain = LCD_CtrlLinesConfig &rArr; GPIO_PinAFConfig
+<BR><BR>[Stack]<UL><LI>Max Depth = 36<LI>Call Chain = LCD_CtrlLinesConfig &rArr; GPIO_Init
 </UL>
 <BR>[Calls]<UL><LI><a href="#[c9]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;RCC_AHB1PeriphClockCmd
-<LI><a href="#[cb]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;GPIO_PinAFConfig
 <LI><a href="#[ca]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;GPIO_Init
+<LI><a href="#[cb]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;GPIO_PinAFConfig
 </UL>
 <BR>[Called By]<UL><LI><a href="#[ec]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TFT_LCD_Init
 </UL>
@@ -1381,14 +1381,14 @@ Global Symbols
 </UL>
 
 <P><STRONG><a name="[fd]"></a>SPI1_Init</STRONG> (Thumb, 198 bytes, Stack size 32 bytes, spi.o(i.SPI1_Init))
-<BR><BR>[Stack]<UL><LI>Max Depth = 52<LI>Call Chain = SPI1_Init &rArr; GPIO_PinAFConfig
+<BR><BR>[Stack]<UL><LI>Max Depth = 52<LI>Call Chain = SPI1_Init &rArr; GPIO_Init
 </UL>
 <BR>[Calls]<UL><LI><a href="#[fe]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;RCC_APB2PeriphClockCmd
 <LI><a href="#[c9]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;RCC_AHB1PeriphClockCmd
-<LI><a href="#[cb]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;GPIO_PinAFConfig
 <LI><a href="#[ca]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;GPIO_Init
 <LI><a href="#[100]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;SPI_Init
 <LI><a href="#[ff]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;RCC_APB2PeriphResetCmd
+<LI><a href="#[cb]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;GPIO_PinAFConfig
 <LI><a href="#[101]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;SPI_Cmd
 <LI><a href="#[102]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;SPI1_ReadWriteByte
 </UL>
@@ -1500,9 +1500,9 @@ Global Symbols
 </UL>
 
 <P><STRONG><a name="[114]"></a>TIM_Cmd</STRONG> (Thumb, 24 bytes, Stack size 0 bytes, stm32f4xx_tim.o(i.TIM_Cmd))
-<BR><BR>[Called By]<UL><LI><a href="#[c2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_Timer_Init
-<LI><a href="#[c1]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_PWM_Init
+<BR><BR>[Called By]<UL><LI><a href="#[c1]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_PWM_Init
 <LI><a href="#[111]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_FireBurst
+<LI><a href="#[c2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_Timer_Init
 </UL>
 
 <P><STRONG><a name="[122]"></a>TIM_CtrlPWMOutputs</STRONG> (Thumb, 30 bytes, Stack size 0 bytes, stm32f4xx_tim.o(i.TIM_CtrlPWMOutputs))
@@ -1546,18 +1546,18 @@ Global Symbols
 </UL>
 
 <P><STRONG><a name="[112]"></a>TIM_SetCounter</STRONG> (Thumb, 4 bytes, Stack size 0 bytes, stm32f4xx_tim.o(i.TIM_SetCounter))
-<BR><BR>[Called By]<UL><LI><a href="#[116]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_MeasureOnce
-<LI><a href="#[111]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_FireBurst
+<BR><BR>[Called By]<UL><LI><a href="#[111]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_FireBurst
+<LI><a href="#[116]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_MeasureOnce
 </UL>
 
 <P><STRONG><a name="[11a]"></a>TIM_TimeBaseInit</STRONG> (Thumb, 104 bytes, Stack size 0 bytes, stm32f4xx_tim.o(i.TIM_TimeBaseInit))
-<BR><BR>[Called By]<UL><LI><a href="#[c2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_Timer_Init
-<LI><a href="#[c1]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_PWM_Init
+<BR><BR>[Called By]<UL><LI><a href="#[c1]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_PWM_Init
+<LI><a href="#[c2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_Timer_Init
 </UL>
 
 <P><STRONG><a name="[119]"></a>TIM_TimeBaseStructInit</STRONG> (Thumb, 18 bytes, Stack size 0 bytes, stm32f4xx_tim.o(i.TIM_TimeBaseStructInit))
-<BR><BR>[Called By]<UL><LI><a href="#[c2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_Timer_Init
-<LI><a href="#[c1]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_PWM_Init
+<BR><BR>[Called By]<UL><LI><a href="#[c1]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_PWM_Init
+<LI><a href="#[c2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_Timer_Init
 </UL>
 
 <P><STRONG><a name="[f5]"></a>Task_Create</STRONG> (Thumb, 212 bytes, Stack size 24 bytes, os_cpu.o(i.Task_Create))
@@ -1590,6 +1590,40 @@ Global Symbols
 <BR><BR>[Called By]<UL><LI><a href="#[33]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;USART1_IRQHandler
 </UL>
 
+<P><STRONG><a name="[111]"></a>Ultrasonic_FireBurst</STRONG> (Thumb, 58 bytes, Stack size 8 bytes, drive_pwm.o(i.Ultrasonic_FireBurst))
+<BR><BR>[Stack]<UL><LI>Max Depth = 8<LI>Call Chain = Ultrasonic_FireBurst
+</UL>
+<BR>[Calls]<UL><LI><a href="#[112]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_SetCounter
+<LI><a href="#[114]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_Cmd
+<LI><a href="#[115]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_GetFlagStatus
+<LI><a href="#[113]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_ClearFlag
+</UL>
+<BR>[Called By]<UL><LI><a href="#[116]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_MeasureOnce
+</UL>
+
+<P><STRONG><a name="[c1]"></a>Ultrasonic_PWM_Init</STRONG> (Thumb, 260 bytes, Stack size 48 bytes, drive_pwm.o(i.Ultrasonic_PWM_Init))
+<BR><BR>[Stack]<UL><LI>Max Depth = 68<LI>Call Chain = Ultrasonic_PWM_Init &rArr; GPIO_Init
+</UL>
+<BR>[Calls]<UL><LI><a href="#[119]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_TimeBaseStructInit
+<LI><a href="#[11a]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_TimeBaseInit
+<LI><a href="#[114]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_Cmd
+<LI><a href="#[fe]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;RCC_APB2PeriphClockCmd
+<LI><a href="#[c9]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;RCC_AHB1PeriphClockCmd
+<LI><a href="#[10c]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;GPIO_StructInit
+<LI><a href="#[ca]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;GPIO_Init
+<LI><a href="#[121]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_SelectOnePulseMode
+<LI><a href="#[11b]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_OCStructInit
+<LI><a href="#[11f]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_OC2PreloadConfig
+<LI><a href="#[11d]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_OC2Init
+<LI><a href="#[11e]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_OC1PreloadConfig
+<LI><a href="#[11c]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_OC1Init
+<LI><a href="#[122]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_CtrlPWMOutputs
+<LI><a href="#[120]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_ARRPreloadConfig
+<LI><a href="#[cb]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;GPIO_PinAFConfig
+</UL>
+<BR>[Called By]<UL><LI><a href="#[c0]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Init_All
+</UL>
+
 <P><STRONG><a name="[9]"></a>UsageFault_Handler</STRONG> (Thumb, 4 bytes, Stack size 0 bytes, stm32f4xx_it.o(i.UsageFault_Handler))
 <BR>[Address Reference Count : 1]<UL><LI> startup_stm32f40_41xxx.o(RESET)
 </UL>
@@ -1608,7 +1642,7 @@ Global Symbols
 <BR>[Address Reference Count : 1]<UL><LI> main.o(i.main)
 </UL>
 <P><STRONG><a name="[124]"></a>W25Q64_Init</STRONG> (Thumb, 106 bytes, Stack size 16 bytes, w25q64.o(i.W25Q64_Init))
-<BR><BR>[Stack]<UL><LI>Max Depth = 68<LI>Call Chain = W25Q64_Init &rArr; SPI1_Init &rArr; GPIO_PinAFConfig
+<BR><BR>[Stack]<UL><LI>Max Depth = 68<LI>Call Chain = W25Q64_Init &rArr; SPI1_Init &rArr; GPIO_Init
 </UL>
 <BR>[Calls]<UL><LI><a href="#[c9]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;RCC_AHB1PeriphClockCmd
 <LI><a href="#[ca]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;GPIO_Init
@@ -1686,7 +1720,7 @@ Global Symbols
 
 <P><STRONG><a name="[ed]"></a>font_init</STRONG> (Thumb, 64 bytes, Stack size 8 bytes, fontupd.o(i.font_init))
 <BR><BR>[Stack]<UL><LI>Max Depth = 76 + Unknown Stack Size
-<LI>Call Chain = font_init &rArr; W25Q64_Init &rArr; SPI1_Init &rArr; GPIO_PinAFConfig
+<LI>Call Chain = font_init &rArr; W25Q64_Init &rArr; SPI1_Init &rArr; GPIO_Init
 </UL>
 <BR>[Calls]<UL><LI><a href="#[db]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;delay_ms
 <LI><a href="#[e7]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;W25Q64_Read
@@ -1867,11 +1901,11 @@ Local Symbols
 </UL>
 
 <P><STRONG><a name="[c0]"></a>Init_All</STRONG> (Thumb, 26 bytes, Stack size 8 bytes, user.o(i.Init_All))
-<BR><BR>[Stack]<UL><LI>Max Depth = 76<LI>Call Chain = Init_All &rArr; Ultrasonic_PWM_Init &rArr; GPIO_PinAFConfig
+<BR><BR>[Stack]<UL><LI>Max Depth = 76<LI>Call Chain = Init_All &rArr; Ultrasonic_PWM_Init &rArr; GPIO_Init
 </UL>
-<BR>[Calls]<UL><LI><a href="#[b8]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;LCD_Clear
+<BR>[Calls]<UL><LI><a href="#[c1]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_PWM_Init
+<LI><a href="#[b8]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;LCD_Clear
 <LI><a href="#[c2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_Timer_Init
-<LI><a href="#[c1]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_PWM_Init
 <LI><a href="#[c3]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_Echo_Init
 <LI><a href="#[a6]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Calibration_Load
 </UL>
@@ -1982,17 +2016,6 @@ Local Symbols
 <BR>[Called By]<UL><LI><a href="#[c0]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Init_All
 </UL>
 
-<P><STRONG><a name="[111]"></a>Ultrasonic_FireBurst</STRONG> (Thumb, 64 bytes, Stack size 8 bytes, user.o(i.Ultrasonic_FireBurst))
-<BR><BR>[Stack]<UL><LI>Max Depth = 8<LI>Call Chain = Ultrasonic_FireBurst
-</UL>
-<BR>[Calls]<UL><LI><a href="#[112]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_SetCounter
-<LI><a href="#[115]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_GetFlagStatus
-<LI><a href="#[114]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_Cmd
-<LI><a href="#[113]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_ClearFlag
-</UL>
-<BR>[Called By]<UL><LI><a href="#[116]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_MeasureOnce
-</UL>
-
 <P><STRONG><a name="[d8]"></a>Ultrasonic_MeasureFiltered</STRONG> (Thumb, 132 bytes, Stack size 48 bytes, user.o(i.Ultrasonic_MeasureFiltered))
 <BR><BR>[Stack]<UL><LI>Max Depth = 104 + Unknown Stack Size
 <LI>Call Chain = Ultrasonic_MeasureFiltered &rArr; delay_ms &rArr; delay_us &rArr; OS_SchedUnlock
@@ -2011,34 +2034,11 @@ Local Symbols
 <LI>Call Chain = Ultrasonic_MeasureOnce &rArr; delay_us &rArr; OS_SchedUnlock
 </UL>
 <BR>[Calls]<UL><LI><a href="#[118]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;delay_us
+<LI><a href="#[111]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_FireBurst
 <LI><a href="#[112]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_SetCounter
 <LI><a href="#[bd]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;EXTI_ClearITPendingBit
-<LI><a href="#[111]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_FireBurst
 </UL>
 <BR>[Called By]<UL><LI><a href="#[d8]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_MeasureFiltered
-</UL>
-
-<P><STRONG><a name="[c1]"></a>Ultrasonic_PWM_Init</STRONG> (Thumb, 260 bytes, Stack size 48 bytes, user.o(i.Ultrasonic_PWM_Init))
-<BR><BR>[Stack]<UL><LI>Max Depth = 68<LI>Call Chain = Ultrasonic_PWM_Init &rArr; GPIO_PinAFConfig
-</UL>
-<BR>[Calls]<UL><LI><a href="#[119]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_TimeBaseStructInit
-<LI><a href="#[11a]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_TimeBaseInit
-<LI><a href="#[121]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_SelectOnePulseMode
-<LI><a href="#[11b]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_OCStructInit
-<LI><a href="#[11f]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_OC2PreloadConfig
-<LI><a href="#[11d]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_OC2Init
-<LI><a href="#[11e]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_OC1PreloadConfig
-<LI><a href="#[11c]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_OC1Init
-<LI><a href="#[122]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_CtrlPWMOutputs
-<LI><a href="#[114]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_Cmd
-<LI><a href="#[120]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM_ARRPreloadConfig
-<LI><a href="#[fe]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;RCC_APB2PeriphClockCmd
-<LI><a href="#[c9]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;RCC_AHB1PeriphClockCmd
-<LI><a href="#[10c]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;GPIO_StructInit
-<LI><a href="#[cb]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;GPIO_PinAFConfig
-<LI><a href="#[ca]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;GPIO_Init
-</UL>
-<BR>[Called By]<UL><LI><a href="#[c0]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Init_All
 </UL>
 
 <P><STRONG><a name="[c2]"></a>Ultrasonic_Timer_Init</STRONG> (Thumb, 56 bytes, Stack size 16 bytes, user.o(i.Ultrasonic_Timer_Init))

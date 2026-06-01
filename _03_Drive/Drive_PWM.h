@@ -6,6 +6,24 @@
 
 /* 全局宏定义 ----------------------------------------------------------------*/
 
+/***** 超声波测距 TIM1 引脚映射 *****/
+#define ULTRASONIC_CH1_GPIO_PORT       GPIOA
+#define ULTRASONIC_CH1_GPIO_PIN        GPIO_Pin_8
+#define ULTRASONIC_CH1_GPIO_SOURCE     GPIO_PinSource8
+
+#define ULTRASONIC_CH2_GPIO_PORT       GPIOE
+#define ULTRASONIC_CH2_GPIO_PIN        GPIO_Pin_11
+#define ULTRASONIC_CH2_GPIO_SOURCE     GPIO_PinSource11
+
+#define ULTRASONIC_TIM1_AF             GPIO_AF_TIM1
+
+/***** 超声波测距 PWM 时序参数 *****/
+#define ULTRASONIC_PWM_FREQ_HZ         40000U
+#define ULTRASONIC_TIM1_CLK_HZ         168000000U
+#define ULTRASONIC_PWM_PERIOD_TICKS    (ULTRASONIC_TIM1_CLK_HZ / ULTRASONIC_PWM_FREQ_HZ)
+#define ULTRASONIC_PWM_PULSE_TICKS     (ULTRASONIC_PWM_PERIOD_TICKS / 2U)
+#define ULTRASONIC_BURST_CYCLES        8U
+
 /* 结构体声明 ----------------------------------------------------------------*/
 
 /* 全局变量声明 --------------------------------------------------------------*/
@@ -14,6 +32,8 @@
 void PWM1_Init(u16 arr,u16 psc);
 void PWM1_CCR_Set(double xccr1);
 void PWM2_Init(void);
+void Ultrasonic_PWM_Init(void);
+void Ultrasonic_FireBurst(void);
 #endif
 
 

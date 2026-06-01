@@ -142,11 +142,8 @@ void PWM2_Init(void)
     @FunctionName  : Ultrasonic_PWM_Init()
     @Description   : 超声波测距TIM1 PWM初始化（CH1=PA8, CH2=PE11）
     @Data          : 2026/6/1
-    @param period  : TIM1自动重装载值
-    @param pulse   : 比较值（决定占空比）
-    @param burst_cycles : 重复计数（决定脉冲个数）
     ------------------------------------------------------------------------------*/
-void Ultrasonic_PWM_Init(u16 period, u16 pulse, u16 burst_cycles)
+void Ultrasonic_PWM_Init(void)
 {
     GPIO_InitTypeDef gpio;
     TIM_TimeBaseInitTypeDef tim_base;
@@ -173,9 +170,9 @@ void Ultrasonic_PWM_Init(u16 period, u16 pulse, u16 burst_cycles)
     TIM_TimeBaseStructInit(&tim_base);
     tim_base.TIM_Prescaler = 0;
     tim_base.TIM_CounterMode = TIM_CounterMode_Up;
-    tim_base.TIM_Period = period;
+    tim_base.TIM_Period = ULTRASONIC_PWM_PERIOD_TICKS - 1U;
     tim_base.TIM_ClockDivision = TIM_CKD_DIV1;
-    tim_base.TIM_RepetitionCounter = burst_cycles;
+    tim_base.TIM_RepetitionCounter = ULTRASONIC_BURST_CYCLES - 1U;
     TIM_TimeBaseInit(TIM1, &tim_base);
 
     TIM_OCStructInit(&tim_oc);
@@ -183,11 +180,11 @@ void Ultrasonic_PWM_Init(u16 period, u16 pulse, u16 burst_cycles)
     tim_oc.TIM_OutputState = TIM_OutputState_Enable;
     tim_oc.TIM_OCPolarity = TIM_OCPolarity_High;
     tim_oc.TIM_OCIdleState = TIM_OCIdleState_Reset;
-    tim_oc.TIM_Pulse = pulse;
+    tim_oc.TIM_Pulse = ULTRASONIC_PWM_PULSE_TICKS;
     TIM_OC1Init(TIM1, &tim_oc);
 
     tim_oc.TIM_OCMode = TIM_OCMode_PWM2;
-    tim_oc.TIM_Pulse = pulse;
+    tim_oc.TIM_Pulse = ULTRASONIC_PWM_PULSE_TICKS;
     TIM_OC2Init(TIM1, &tim_oc);
 
     TIM_OC1PreloadConfig(TIM1, TIM_OCPreload_Enable);

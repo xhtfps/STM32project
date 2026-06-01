@@ -1,10 +1,5 @@
 #include "User.h"
 
-#define ULTRASONIC_PWM_FREQ_HZ       40000U
-#define ULTRASONIC_TIMER_CLK_HZ      168000000U
-#define ULTRASONIC_PWM_PERIOD_TICKS  (ULTRASONIC_TIMER_CLK_HZ / ULTRASONIC_PWM_FREQ_HZ)
-#define ULTRASONIC_PWM_PULSE_TICKS   (ULTRASONIC_PWM_PERIOD_TICKS / 2U)
-#define ULTRASONIC_BURST_CYCLES      8U
 #define ULTRASONIC_TIMEOUT_US        12000U
 #define ULTRASONIC_MIN_VALID_US      20U
 #define ULTRASONIC_FILTER_SAMPLES    5U
@@ -12,12 +7,12 @@
 #define ULTRASONIC_FLASH_MAGIC       0x55534F4EU
 #define ULTRASONIC_FLASH_VERSION     0x00010001U
 
-// 屏幕显示汉字宏定义
+// 屏幕显示常量定义
 #define TITLE_STR        "超声波测距仪"
 #define MODEL_VER_STR    "型号：HC-SR04"
 #define USER_VER_STR     "版本：V1.0"
 #define MENU1_CHOICE1    "1. 实时测量"
-#define MENU1_CHOICE2    "2. 参数校准"
+#define MENU1_CHOICE2    "2. 距离校准"
 #define MENU1_CHOICE3    "3. 系统状态"
 #define MENU_CHOICE_NUM  3
 
@@ -99,9 +94,7 @@ void User_main(void)
 static void Init_All(void)
 {
     LCD_Clear(Black);
-    Ultrasonic_PWM_Init(ULTRASONIC_PWM_PERIOD_TICKS - 1U,
-                        ULTRASONIC_PWM_PULSE_TICKS,
-                        ULTRASONIC_BURST_CYCLES - 1U);
+    Ultrasonic_PWM_Init();
     Ultrasonic_Timer_Init();
     Ultrasonic_Echo_Init();
     Calibration_Load();
@@ -125,9 +118,9 @@ static void Disp_Main(void)
         OS_String_Show(32, (uint16_t)(32 + 64 * count), 32, 1, "-");
     }
 
-    OS_String_Show(80, 96, 32, 1, MENU1_CHOICE1);
-    OS_String_Show(80, 160, 32, 1, MENU1_CHOICE2);
-    OS_String_Show(80, 224, 32, 1, MENU1_CHOICE3);
+    OS_String_Show(60, 96, 32, 1, MENU1_CHOICE1);
+    OS_String_Show(60, 160, 32, 1, MENU1_CHOICE2);
+    OS_String_Show(60, 224, 32, 1, MENU1_CHOICE3);
 }
 
 static void Change_Menu(uint8_t menu_sign)
@@ -449,14 +442,14 @@ static float Convert_Time_To_Distance(uint32_t echo_us)
     return distance;
 }
 
-// 测量菜单
+// 测量模式
 static void MenuHandler_Measure(void)
 {
     char status_text[64];
 
-    Draw_Work_Title("测量模块");
-    Draw_Key_Tips("确认开始测量", "返回主菜单");
-    Show_Text_Line(0, "正在测量...");
+    Draw_Work_Title("测量模式");
+    Draw_Key_Tips("确认开始测量", "返回退出测量");
+    Show_Text_Line(0, "测量准备...");
 
     while(Ps2KeyValue != KeyValue_Back)
     {
@@ -482,7 +475,7 @@ static void MenuHandler_Measure(void)
     Change_Menu(0);
 }
 
-// 校准菜单
+// 校准模式
 static void MenuHandler_Calibrate(void)
 {
     UltrasonicCalibData new_calib;
@@ -498,12 +491,12 @@ static void MenuHandler_Calibrate(void)
     new_calib.reserved[0] = 0;
     new_calib.reserved[1] = 0;
 
-    Draw_Work_Title("校准模块");
-    Draw_Key_Tips("确认开始校准", "返回主菜单");
+    Draw_Work_Title("校准模式");
+    Draw_Key_Tips("确认开始校准", "返回退出校准");
 
     while(Ps2KeyValue != KeyValue_Back)
     {
-        sprintf(line, "请将探头放置%umm处开始校准", k_calib_distance_mm[step]);
+        sprintf(line, "请将探头对准%umm开始校准", k_calib_distance_mm[step]);
         Show_Text_Line(0, line);
 
         if(Ps2KeyValue == KeyValue_Enter)
@@ -538,7 +531,7 @@ static void MenuHandler_Calibrate(void)
             }
             else
             {
-                Show_Text_Line(1, "校准失败，请重试");
+                Show_Text_Line(1, "校准失败，测量超时");
             }
         }
         delay_ms(20);
@@ -548,13 +541,13 @@ static void MenuHandler_Calibrate(void)
     Change_Menu(0);
 }
 
-// 状态菜单
+// 状态模式
 static void MenuHandler_Status(void)
 {
     Draw_Work_Title("系统状态");
-    Draw_Key_Tips("确认查看参数", "返回主菜单");
+    Draw_Key_Tips("确认查看测量", "返回退出查看");
 
-    Show_Text_Line(0, (g_calib_valid != 0U) ? "校准正常" : "未校准/校准数据无效");
+    Show_Text_Line(0, (g_calib_valid != 0U) ? "校准有效" : "未校准/校准数据无效");
     Show_Value_Line(1, "校准点1(us)", g_calib.point_us[0], "%0.0f");
     Show_Value_Line(2, "校准点2(us)", g_calib.point_us[1], "%0.0f");
     Show_Value_Line(3, "校准点3(us)", g_calib.point_us[2], "%0.0f");
