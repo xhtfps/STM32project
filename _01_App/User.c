@@ -48,10 +48,8 @@ static void Draw_Key_Tips(char *tip1, char *tip2);
 static void Show_Text_Line(uint16_t line, char *text);
 static void Show_Value_Line(uint16_t line, char *label, double value, char *format);
 
-static void Ultrasonic_PWM_Init(void);
 static void Ultrasonic_Timer_Init(void);
 static void Ultrasonic_Echo_Init(void);
-static void Ultrasonic_FireBurst(void);
 static uint8_t Ultrasonic_MeasureOnce(uint32_t *echo_us);
 static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us);
 static void Sort_Samples(uint32_t *data, uint8_t length);
@@ -101,7 +99,9 @@ void User_main(void)
 static void Init_All(void)
 {
     LCD_Clear(Black);
-    Ultrasonic_PWM_Init();
+    Ultrasonic_PWM_Init(ULTRASONIC_PWM_PERIOD_TICKS - 1U,
+                        ULTRASONIC_PWM_PULSE_TICKS,
+                        ULTRASONIC_BURST_CYCLES - 1U);
     Ultrasonic_Timer_Init();
     Ultrasonic_Echo_Init();
     Calibration_Load();
@@ -186,53 +186,6 @@ static void Show_Value_Line(uint16_t line, char *label, double value, char *form
     OS_Num_Show(500, y, 24, 1, value, format);
 }
 
-static void Ultrasonic_PWM_Init(void)
-{
-    GPIO_InitTypeDef gpio_init;
-    TIM_TimeBaseInitTypeDef tim_base;
-    TIM_OCInitTypeDef tim_oc;
-
-    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1, ENABLE);
-
-    GPIO_PinAFConfig(GPIOA, GPIO_PinSource8, GPIO_AF_TIM1);
-    GPIO_PinAFConfig(GPIOA, GPIO_PinSource9, GPIO_AF_TIM1);
-
-    GPIO_StructInit(&gpio_init);
-    gpio_init.GPIO_Pin = GPIO_Pin_8 | GPIO_Pin_9;
-    gpio_init.GPIO_Mode = GPIO_Mode_AF;
-    gpio_init.GPIO_Speed = GPIO_Speed_100MHz;
-    gpio_init.GPIO_OType = GPIO_OType_PP;
-    gpio_init.GPIO_PuPd = GPIO_PuPd_NOPULL;
-    GPIO_Init(GPIOA, &gpio_init);
-
-    TIM_TimeBaseStructInit(&tim_base);
-    tim_base.TIM_Prescaler = 0;
-    tim_base.TIM_CounterMode = TIM_CounterMode_Up;
-    tim_base.TIM_Period = ULTRASONIC_PWM_PERIOD_TICKS - 1U;
-    tim_base.TIM_ClockDivision = TIM_CKD_DIV1;
-    tim_base.TIM_RepetitionCounter = ULTRASONIC_BURST_CYCLES - 1U;
-    TIM_TimeBaseInit(TIM1, &tim_base);
-
-    TIM_OCStructInit(&tim_oc);
-    tim_oc.TIM_OCMode = TIM_OCMode_PWM1;
-    tim_oc.TIM_OutputState = TIM_OutputState_Enable;
-    tim_oc.TIM_OCPolarity = TIM_OCPolarity_High;
-    tim_oc.TIM_OCIdleState = TIM_OCIdleState_Reset;
-    tim_oc.TIM_Pulse = ULTRASONIC_PWM_PULSE_TICKS;
-    TIM_OC1Init(TIM1, &tim_oc);
-
-    tim_oc.TIM_OCMode = TIM_OCMode_PWM2;
-    tim_oc.TIM_Pulse = ULTRASONIC_PWM_PULSE_TICKS;
-    TIM_OC2Init(TIM1, &tim_oc);
-
-    TIM_OC1PreloadConfig(TIM1, TIM_OCPreload_Enable);
-    TIM_OC2PreloadConfig(TIM1, TIM_OCPreload_Enable);
-    TIM_ARRPreloadConfig(TIM1, ENABLE);
-    TIM_SelectOnePulseMode(TIM1, TIM_OPMode_Single);
-    TIM_CtrlPWMOutputs(TIM1, ENABLE);
-    TIM_Cmd(TIM1, DISABLE);
-}
 
 static void Ultrasonic_Timer_Init(void)
 {
@@ -281,20 +234,6 @@ static void Ultrasonic_Echo_Init(void)
     NVIC_Init(&nvic_init);
 }
 
-static void Ultrasonic_FireBurst(void)
-{
-    TIM_SetCounter(TIM1, 0);
-    TIM1->RCR = ULTRASONIC_BURST_CYCLES - 1U;
-    TIM_ClearFlag(TIM1, TIM_FLAG_Update);
-    TIM_Cmd(TIM1, ENABLE);
-
-    while(TIM_GetFlagStatus(TIM1, TIM_FLAG_Update) == RESET)
-    {
-    }
-
-    TIM_ClearFlag(TIM1, TIM_FLAG_Update);
-    TIM_Cmd(TIM1, DISABLE);
-}
 
 static uint8_t Ultrasonic_MeasureOnce(uint32_t *echo_us)
 {

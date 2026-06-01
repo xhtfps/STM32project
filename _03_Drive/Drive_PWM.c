@@ -136,3 +136,83 @@ void PWM2_Init(void)
 
 
 
+
+
+/** ----------------------------------------------------------------------------
+    @FunctionName  : Ultrasonic_PWM_Init()
+    @Description   : 超声波测距TIM1 PWM初始化（CH1=PA8, CH2=PE11）
+    @Data          : 2026/6/1
+    @param period  : TIM1自动重装载值
+    @param pulse   : 比较值（决定占空比）
+    @param burst_cycles : 重复计数（决定脉冲个数）
+    ------------------------------------------------------------------------------*/
+void Ultrasonic_PWM_Init(u16 period, u16 pulse, u16 burst_cycles)
+{
+    GPIO_InitTypeDef gpio;
+    TIM_TimeBaseInitTypeDef tim_base;
+    TIM_OCInitTypeDef tim_oc;
+
+    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
+    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOE, ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1, ENABLE);
+
+    GPIO_PinAFConfig(ULTRASONIC_CH1_GPIO_PORT, ULTRASONIC_CH1_GPIO_SOURCE, ULTRASONIC_TIM1_AF);
+    GPIO_PinAFConfig(ULTRASONIC_CH2_GPIO_PORT, ULTRASONIC_CH2_GPIO_SOURCE, ULTRASONIC_TIM1_AF);
+
+    GPIO_StructInit(&gpio);
+    gpio.GPIO_Pin = ULTRASONIC_CH1_GPIO_PIN;
+    gpio.GPIO_Mode = GPIO_Mode_AF;
+    gpio.GPIO_Speed = GPIO_Speed_100MHz;
+    gpio.GPIO_OType = GPIO_OType_PP;
+    gpio.GPIO_PuPd = GPIO_PuPd_NOPULL;
+    GPIO_Init(ULTRASONIC_CH1_GPIO_PORT, &gpio);
+
+    gpio.GPIO_Pin = ULTRASONIC_CH2_GPIO_PIN;
+    GPIO_Init(ULTRASONIC_CH2_GPIO_PORT, &gpio);
+
+    TIM_TimeBaseStructInit(&tim_base);
+    tim_base.TIM_Prescaler = 0;
+    tim_base.TIM_CounterMode = TIM_CounterMode_Up;
+    tim_base.TIM_Period = period;
+    tim_base.TIM_ClockDivision = TIM_CKD_DIV1;
+    tim_base.TIM_RepetitionCounter = burst_cycles;
+    TIM_TimeBaseInit(TIM1, &tim_base);
+
+    TIM_OCStructInit(&tim_oc);
+    tim_oc.TIM_OCMode = TIM_OCMode_PWM1;
+    tim_oc.TIM_OutputState = TIM_OutputState_Enable;
+    tim_oc.TIM_OCPolarity = TIM_OCPolarity_High;
+    tim_oc.TIM_OCIdleState = TIM_OCIdleState_Reset;
+    tim_oc.TIM_Pulse = pulse;
+    TIM_OC1Init(TIM1, &tim_oc);
+
+    tim_oc.TIM_OCMode = TIM_OCMode_PWM2;
+    tim_oc.TIM_Pulse = pulse;
+    TIM_OC2Init(TIM1, &tim_oc);
+
+    TIM_OC1PreloadConfig(TIM1, TIM_OCPreload_Enable);
+    TIM_OC2PreloadConfig(TIM1, TIM_OCPreload_Enable);
+    TIM_ARRPreloadConfig(TIM1, ENABLE);
+    TIM_SelectOnePulseMode(TIM1, TIM_OPMode_Single);
+    TIM_CtrlPWMOutputs(TIM1, ENABLE);
+    TIM_Cmd(TIM1, DISABLE);
+}
+
+/** ----------------------------------------------------------------------------
+    @FunctionName  : Ultrasonic_FireBurst()
+    @Description   : 触发一次超声波脉冲串（阻塞等待发送完成）
+    @Data          : 2026/6/1
+    ------------------------------------------------------------------------------*/
+void Ultrasonic_FireBurst(void)
+{
+    TIM_SetCounter(TIM1, 0);
+    TIM_ClearFlag(TIM1, TIM_FLAG_Update);
+    TIM_Cmd(TIM1, ENABLE);
+
+    while(TIM_GetFlagStatus(TIM1, TIM_FLAG_Update) == RESET)
+    {
+    }
+
+    TIM_ClearFlag(TIM1, TIM_FLAG_Update);
+    TIM_Cmd(TIM1, DISABLE);
+}
