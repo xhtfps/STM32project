@@ -149,7 +149,7 @@ void Ultrasonic_PWM_Init(void)
     TIM_TimeBaseInitTypeDef tim_base;
     TIM_OCInitTypeDef tim_oc;
 
-    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
+    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA | RCC_AHB1Periph_GPIOD, ENABLE);
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1, ENABLE);
 
     GPIO_PinAFConfig(ULTRASONIC_CH1_GPIO_PORT, ULTRASONIC_CH1_GPIO_SOURCE, ULTRASONIC_TIM1_AF);
@@ -165,6 +165,17 @@ void Ultrasonic_PWM_Init(void)
 
     gpio.GPIO_Pin = ULTRASONIC_CH2_GPIO_PIN;
     GPIO_Init(ULTRASONIC_CH2_GPIO_PORT, &gpio);
+
+    gpio.GPIO_Pin = ULTRASONIC_RX_CMP_CTRL_PIN | ULTRASONIC_TX_CMP_CTRL_PIN;
+    gpio.GPIO_Mode = GPIO_Mode_OUT;
+    gpio.GPIO_Speed = GPIO_Speed_100MHz;
+    gpio.GPIO_OType = GPIO_OType_PP;
+    gpio.GPIO_PuPd = GPIO_PuPd_UP;
+    GPIO_Init(GPIOD, &gpio);
+
+    /* 8550 高边开关按低电平导通处理：默认关闭发射比较器，打开接收整形比较器。 */
+    ULTRASONIC_TX_CMP_OFF();
+    ULTRASONIC_RX_CMP_ON();
 
     TIM_TimeBaseStructInit(&tim_base);
     tim_base.TIM_Prescaler = 0;
@@ -201,6 +212,10 @@ void Ultrasonic_PWM_Init(void)
     ------------------------------------------------------------------------------*/
 void Ultrasonic_FireBurst(void)
 {
+    /* 发射期间关断接收整形比较器，避免余震和串扰进入比较器。 */
+    ULTRASONIC_RX_CMP_OFF();
+    ULTRASONIC_TX_CMP_ON();
+
     TIM_SetCounter(TIM1, 0);
     TIM_ClearFlag(TIM1, TIM_FLAG_Update);
     TIM_Cmd(TIM1, ENABLE);
@@ -211,4 +226,8 @@ void Ultrasonic_FireBurst(void)
 
     TIM_ClearFlag(TIM1, TIM_FLAG_Update);
     TIM_Cmd(TIM1, DISABLE);
+
+    ULTRASONIC_TX_CMP_OFF();
+    delay_us(ULTRASONIC_RX_RECOVER_US);
+    ULTRASONIC_RX_CMP_ON();
 }

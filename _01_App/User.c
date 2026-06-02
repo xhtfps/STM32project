@@ -5,8 +5,11 @@
 #define ULTRASONIC_TIMEOUT_US        12000U
 // 最小有效回波时间(微秒)：过滤近距离干扰和硬件噪声
 #define ULTRASONIC_MIN_VALID_US      20U
-// 滤波采样次数：采用中值滤波+去极值平均，提高测量稳定性
-#define ULTRASONIC_FILTER_SAMPLES    5U
+#define ULTRASONIC_BLANKING_US       220U   // 发射+恢复后的有效接收起始窗
+#define ULTRASONIC_PEAK_RATIO_NUM    1U     // 峰值位于回波脉冲包络中的经验位置k
+#define ULTRASONIC_PEAK_RATIO_DEN    2U
+// 滤波采样次数：采用多次采样+去极值平均，提高测量稳定性
+#define ULTRASONIC_FILTER_SAMPLES    9U
 #define ULTRASONIC_GAIN_RETRY_MAX    3U
 // Flash存储地址：STM32F407的Sector11(0x080E0000-0x080FFFFF)，用于保存校准数据
 #define ULTRASONIC_FLASH_ADDR        0x080E0000U
@@ -48,7 +51,11 @@ static const uint16_t k_calib_distance_mm[4] = {100, 600, 900, 1300};
 // 超声波测量状态变量
 static volatile uint8_t g_echo_captured = 0;    // 回波捕获标志：1=已捕获有效回波
 static volatile uint8_t g_measure_active = 0;   // 测量进行中标志：1=正在测量
-static volatile uint32_t g_echo_time_us = 0;    // 捕获到的回波时间(微秒)
+static volatile uint32_t g_echo_time_us = 0;    // 估算得到的回波到达时间(微秒)
+static volatile uint32_t g_echo_rise_us = 0;    // 回波脉冲首边沿时间(微秒)
+static volatile uint32_t g_echo_fall_us = 0;    // 回波脉冲终边沿时间(微秒)
+static volatile uint8_t g_echo_rise_seen = 0;   // 回波首边沿已到达标志
+static uint8_t g_gain_settle_discard = 0;       // PGA增益切换后需丢弃一次测量
 static uint32_t g_last_echo_us = 1500U;         // 上一次有效回波时间，用于预测下次增益
 static uint8_t g_ultrasonic_gain_code = PGA112_DEFAULT_GAIN_CODE;
 
@@ -79,6 +86,7 @@ static void Ultrasonic_Echo_Init(void);
 static void Ultrasonic_ApplyGain(uint8_t gain_code);
 static uint8_t Ultrasonic_SelectGainCode(uint32_t echo_us);
 static uint16_t Ultrasonic_GetGainValue(uint8_t gain_code);
+static uint32_t Ultrasonic_EstimatePeakTime(uint32_t rise_us, uint32_t fall_us);
 static void Ultrasonic_PrepareGain(uint8_t retry_count);
 static uint8_t Ultrasonic_MeasureOnce(uint32_t *echo_us);
 static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us);
@@ -146,6 +154,7 @@ static void Init_All(void)
     Ultrasonic_Echo_Init();            // 初始化回波引脚和外部中断
     Calibration_Load();                // 从Flash加载校准数据
     Ultrasonic_ApplyGain(PGA112_DEFAULT_GAIN_CODE);
+    g_gain_settle_discard = 0;
 }
 
 /************************* 主界面显示函数 *************************/
@@ -316,7 +325,7 @@ static void Ultrasonic_Timer_Init(void)
 
 /**
  * @brief 初始化超声波回波引脚和外部中断
- * @note 回波引脚：PC0，下降沿触发中断
+ * @note 回波引脚：PC0，双边沿触发中断，用于提取脉冲首尾边沿
  */
 static void Ultrasonic_Echo_Init(void)
 {
@@ -338,11 +347,11 @@ static void Ultrasonic_Echo_Init(void)
     // 配置EXTI线0连接到PC0
     SYSCFG_EXTILineConfig(EXTI_PortSourceGPIOC, EXTI_PinSource0);
 
-    // 配置EXTI线0为下降沿触发中断
+    // 配置EXTI线0为双边沿触发中断
     EXTI_StructInit(&exti_init);
     exti_init.EXTI_Line = EXTI_Line0;
     exti_init.EXTI_Mode = EXTI_Mode_Interrupt;
-    exti_init.EXTI_Trigger = EXTI_Trigger_Falling;  // 回波结束时为下降沿
+    exti_init.EXTI_Trigger = EXTI_Trigger_Rising_Falling;  // 记录脉冲起止边沿
     exti_init.EXTI_LineCmd = ENABLE;
     EXTI_Init(&exti_init);
     EXTI_ClearITPendingBit(EXTI_Line0);  // 清除中断标志
@@ -363,8 +372,12 @@ static void Ultrasonic_Echo_Init(void)
 static void Ultrasonic_ApplyGain(uint8_t gain_code)
 {
     gain_code &= 0x07U;
-    PGA112_SetGainCode(gain_code);
-    g_ultrasonic_gain_code = gain_code;
+    if(gain_code != g_ultrasonic_gain_code)
+    {
+        PGA112_SetGainCode(gain_code);
+        g_ultrasonic_gain_code = gain_code;
+        g_gain_settle_discard = 1;
+    }
 }
 
 static uint8_t Ultrasonic_SelectGainCode(uint32_t echo_us)
@@ -404,6 +417,18 @@ static uint16_t Ultrasonic_GetGainValue(uint8_t gain_code)
 {
     return PGA112_GetGainValue(gain_code);
 }
+static uint32_t Ultrasonic_EstimatePeakTime(uint32_t rise_us, uint32_t fall_us)
+{
+    uint32_t width;
+
+    if(fall_us <= rise_us)
+    {
+        return rise_us;
+    }
+
+    width = fall_us - rise_us;
+    return rise_us + (width * ULTRASONIC_PEAK_RATIO_NUM) / ULTRASONIC_PEAK_RATIO_DEN;
+}
 
 static void Ultrasonic_PrepareGain(uint8_t retry_count)
 {
@@ -428,29 +453,30 @@ static uint8_t Ultrasonic_MeasureOnce(uint32_t *echo_us)
 {
     uint32_t timeout;
 
-    // 重置测量状态
     g_echo_captured = 0;
     g_measure_active = 1;
     g_echo_time_us = 0;
+    g_echo_rise_us = 0;
+    g_echo_fall_us = 0;
+    g_echo_rise_seen = 0;
 
-    TIM_SetCounter(TIM5, 0);                // 重置定时器计数器
-    EXTI_ClearITPendingBit(EXTI_Line0);     // 清除外部中断标志
-    Ultrasonic_FireBurst();                 // 发射超声波脉冲(10us高电平)
+    TIM_SetCounter(TIM5, 0);
+    EXTI_ClearITPendingBit(EXTI_Line0);
+    Ultrasonic_FireBurst();
 
-    // 等待回波捕获或超时
     for(timeout = 0; timeout < ULTRASONIC_TIMEOUT_US / 10U; timeout++)
     {
         if(g_echo_captured != 0U)
         {
-            *echo_us = g_echo_time_us;  // 返回捕获到的回波时间
+            *echo_us = g_echo_time_us;
             g_measure_active = 0;
-            return 1;  // 测量成功
+            return 1;
         }
-        delay_us(10);  // 每10us检查一次
+        delay_us(10);
     }
 
     g_measure_active = 0;
-    return 0;  // 测量超时
+    return 0;
 }
 
 /**
@@ -461,38 +487,63 @@ static uint8_t Ultrasonic_MeasureOnce(uint32_t *echo_us)
  */
 static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us)
 {
-    uint32_t samples[ULTRASONIC_FILTER_SAMPLES];  // 采样数组
-    uint8_t valid_count = 0;                      // 有效采样数
-    uint8_t attempts = 0;                         // 尝试次数
-    uint32_t sum = 0;                             // 求和变量
+    uint32_t samples[ULTRASONIC_FILTER_SAMPLES];
+    uint8_t valid_count = 0;
+    uint8_t attempts = 0;
+    uint8_t gain_retry = 0;
+    uint32_t sum = 0;
     uint8_t index;
 
-    // 最多尝试(采样数+3)次，直到获得足够的有效采样
-    while(attempts < (ULTRASONIC_FILTER_SAMPLES + 3U) && valid_count < ULTRASONIC_FILTER_SAMPLES)
+    while(attempts < (ULTRASONIC_FILTER_SAMPLES + 6U) && valid_count < ULTRASONIC_FILTER_SAMPLES)
     {
         uint32_t sample = 0;
-        Ultrasonic_PrepareGain(attempts);
+
+        Ultrasonic_PrepareGain(gain_retry);
         attempts++;
+
         if(Ultrasonic_MeasureOnce(&sample) != 0U)
         {
-            samples[valid_count++] = sample;  // 保存有效采样
+            if(g_gain_settle_discard != 0U)
+            {
+                g_gain_settle_discard = 0;
+                delay_ms(20);
+                continue;
+            }
+
+            samples[valid_count++] = sample;
             g_last_echo_us = sample;
+            gain_retry = 0;
         }
-        delay_ms(20);  // 两次测量间隔20ms，防止超声波反射干扰
+        else
+        {
+            if(g_gain_settle_discard != 0U)
+            {
+                g_gain_settle_discard = 0;
+            }
+            else if(gain_retry < ULTRASONIC_GAIN_RETRY_MAX)
+            {
+                gain_retry++;
+            }
+        }
+        delay_ms(20);
     }
 
     if(valid_count == 0U)
     {
-        return 0;  // 所有采样都失败
+        return 0;
     }
 
-    // 对有效采样进行升序排序
     Sort_Samples(samples, valid_count);
-    
-    // 滤波处理
-    if(valid_count >= 3U)
+    if(valid_count >= 5U)
     {
-        // 去掉最大值和最小值，取中间值的平均值
+        for(index = 2; index < (uint8_t)(valid_count - 2U); index++)
+        {
+            sum += samples[index];
+        }
+        *echo_us = sum / (valid_count - 4U);
+    }
+    else if(valid_count >= 3U)
+    {
         for(index = 1; index < (uint8_t)(valid_count - 1U); index++)
         {
             sum += samples[index];
@@ -501,12 +552,11 @@ static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us)
     }
     else
     {
-        // 有效采样不足3个，取中值
         *echo_us = samples[valid_count / 2U];
     }
 
     g_last_echo_us = *echo_us;
-    return 1;  // 测量成功
+    return 1;
 }
 
 /**
@@ -876,26 +926,38 @@ static void MenuHandler_Status(void)
 /************************* 中断服务函数 *************************/
 /**
  * @brief EXTI0外部中断服务函数
- * @note 当回波引脚(PC0)出现下降沿时触发，表示超声波回波结束
+ * @note 当回波引脚(PC0)出现边沿时触发：上升沿记录起点，下降沿记录终点
  */
 void EXTI0_IRQHandler(void)
 {
-    // 检查EXTI线0的中断标志
     if(EXTI_GetITStatus(EXTI_Line0) != RESET)
     {
-        // 只有在测量进行中时才处理中断
         if(g_measure_active != 0U)
         {
-            uint32_t now = TIM_GetCounter(TIM5);  // 获取当前定时器计数值(微秒)
-            
-            // 只有大于最小有效时间的回波才被认为是有效回波
-            if(now >= ULTRASONIC_MIN_VALID_US)
+            uint32_t now = TIM_GetCounter(TIM5);
+
+            if(now >= ULTRASONIC_BLANKING_US)
             {
-                g_echo_time_us = now;    // 保存回波时间
-                g_echo_captured = 1;     // 设置回波捕获标志
-                g_measure_active = 0;    // 结束测量状态
+                if(GPIO_ReadInputDataBit(GPIOC, GPIO_Pin_0) != Bit_RESET)
+                {
+                    if(g_echo_rise_seen == 0U)
+                    {
+                        g_echo_rise_us = now;
+                        g_echo_rise_seen = 1U;
+                    }
+                }
+                else if(g_echo_rise_seen != 0U && now > g_echo_rise_us)
+                {
+                    g_echo_fall_us = now;
+                    g_echo_time_us = Ultrasonic_EstimatePeakTime(g_echo_rise_us, g_echo_fall_us);
+                    if(g_echo_time_us >= ULTRASONIC_MIN_VALID_US)
+                    {
+                        g_echo_captured = 1U;
+                        g_measure_active = 0U;
+                    }
+                }
             }
         }
-        EXTI_ClearITPendingBit(EXTI_Line0);  // 清除中断标志
+        EXTI_ClearITPendingBit(EXTI_Line0);
     }
 }
