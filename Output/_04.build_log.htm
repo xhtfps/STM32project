@@ -27,7 +27,33 @@ Project File Date:  04/16/2026
 <h2>Output:</h2>
 *** Using Compiler 'V5.06 update 5 (build 528)', folder: 'D:\keil5\ARM\ARMCC\Bin'
 Build target '_04 OS'
-".\Output\_04.axf" - 0 Error(s), 0 Warning(s).
+compiling User.c...
+.\_01_App\User.h(18): warning:  #1-D: last line of file ends without a newline
+  #endif
+.\_03_Drive\User_DAC.h(25): warning:  #1295-D: Deprecated declaration User_DAC_Configure - give arg types
+  void User_DAC_Configure();
+_01_App\User.h(18): warning:  #1-D: last line of file ends without a newline
+  #endif
+_01_App\User.c(18): warning:  #47-D: incompatible redefinition of macro "TITLE_STR"  (declared at line 7 of "_01_App\User.h")
+  #define TITLE_STR        "超声波测距仪"       // 主界面标题
+_01_App\User.c(19): warning:  #47-D: incompatible redefinition of macro "MODEL_VER_STR"  (declared at line 8 of "_01_App\User.h")
+  #define MODEL_VER_STR    "型号：HC-SR04"      // 硬件型号
+_01_App\User.c(20): warning:  #47-D: incompatible redefinition of macro "USER_VER_STR"  (declared at line 9 of "_01_App\User.h")
+  #define USER_VER_STR     "版本：V1.0"         // 软件版本
+_01_App\User.c(21): warning:  #47-D: incompatible redefinition of macro "MENU1_CHOICE1"  (declared at line 12 of "_01_App\User.h")
+  #define MENU1_CHOICE1    "1. 实时测量"        // 菜单选项1
+_01_App\User.c(22): warning:  #47-D: incompatible redefinition of macro "MENU1_CHOICE2"  (declared at line 13 of "_01_App\User.h")
+  #define MENU1_CHOICE2    "2. 距离校准"        // 菜单选项2
+_01_App\User.c(23): warning:  #47-D: incompatible redefinition of macro "MENU1_CHOICE3"  (declared at line 14 of "_01_App\User.h")
+  #define MENU1_CHOICE3    "3. 系统状态"        // 菜单选项3
+_01_App\User.c(137): warning:  #223-D: function "Ultrasonic_PWM_Init" declared implicitly
+      Ultrasonic_PWM_Init();             // 初始化超声波触发引脚(PWM输出)
+_01_App\User.c(366): warning:  #223-D: function "Ultrasonic_FireBurst" declared implicitly
+      Ultrasonic_FireBurst();                 // 发射超声波脉冲(10us高电平)
+_01_App\User.c: 11 warnings, 0 errors
+linking...
+Program Size: Code=18928 RO-data=42472 RW-data=128 ZI-data=1166840  
+".\Output\_04.axf" - 0 Error(s), 11 Warning(s).
 
 <h2>Software Packages used:</h2>
 
@@ -41,7 +67,7 @@ Package Vendor: Keil
   D:\keil5\ARM\PACK\Keil\STM32F4xx_DFP\1.0.8\Device\Include
 
 <h2>Collection of Component Files used:</h2>
-Build Time Elapsed:  00:00:01
+Build Time Elapsed:  00:00:02
 </pre>
 </body>
 </html>
