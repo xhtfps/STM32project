@@ -615,6 +615,11 @@
               <FilePath>.\_03_Drive\User_PGA2310.c</FilePath>
             </File>
             <File>
+              <FileName>User_PGA112.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\_03_Drive\User_PGA112.c</FilePath>
+            </File>
+            <File>
               <FileName>User_DAC.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\_03_Drive\User_DAC.c</FilePath>

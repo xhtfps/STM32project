@@ -62,6 +62,7 @@
 #include "User_DAC.h"
 
 #include "User_SPI.h"
+#include "User_PGA112.h"
 #include "User_IIC.h"
 #include "User_BGD.h"
 #include "User_DAC8562.h"

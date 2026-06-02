@@ -7,6 +7,7 @@
 #define ULTRASONIC_MIN_VALID_US      20U
 // 滤波采样次数：采用中值滤波+去极值平均，提高测量稳定性
 #define ULTRASONIC_FILTER_SAMPLES    5U
+#define ULTRASONIC_GAIN_RETRY_MAX    3U
 // Flash存储地址：STM32F407的Sector11(0x080E0000-0x080FFFFF)，用于保存校准数据
 #define ULTRASONIC_FLASH_ADDR        0x080E0000U
 // Flash数据魔数：用于校验校准数据的有效性
@@ -48,6 +49,8 @@ static const uint16_t k_calib_distance_mm[4] = {100, 600, 900, 1300};
 static volatile uint8_t g_echo_captured = 0;    // 回波捕获标志：1=已捕获有效回波
 static volatile uint8_t g_measure_active = 0;   // 测量进行中标志：1=正在测量
 static volatile uint32_t g_echo_time_us = 0;    // 捕获到的回波时间(微秒)
+static uint32_t g_last_echo_us = 1500U;         // 上一次有效回波时间，用于预测下次增益
+static uint8_t g_ultrasonic_gain_code = PGA112_DEFAULT_GAIN_CODE;
 
 // 校准数据变量
 static UltrasonicCalibData g_calib = {0};       // 当前生效的校准数据
@@ -73,6 +76,10 @@ static void Show_Value_Line(uint16_t line, char *label, double value, char *form
 // 超声波硬件驱动函数
 static void Ultrasonic_Timer_Init(void);
 static void Ultrasonic_Echo_Init(void);
+static void Ultrasonic_ApplyGain(uint8_t gain_code);
+static uint8_t Ultrasonic_SelectGainCode(uint32_t echo_us);
+static uint16_t Ultrasonic_GetGainValue(uint8_t gain_code);
+static void Ultrasonic_PrepareGain(uint8_t retry_count);
 static uint8_t Ultrasonic_MeasureOnce(uint32_t *echo_us);
 static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us);
 static void Sort_Samples(uint32_t *data, uint8_t length);
@@ -138,6 +145,7 @@ static void Init_All(void)
     Ultrasonic_Timer_Init();           // 初始化定时器5，用于计时回波时间
     Ultrasonic_Echo_Init();            // 初始化回波引脚和外部中断
     Calibration_Load();                // 从Flash加载校准数据
+    Ultrasonic_ApplyGain(PGA112_DEFAULT_GAIN_CODE);
 }
 
 /************************* 主界面显示函数 *************************/
@@ -352,6 +360,70 @@ static void Ultrasonic_Echo_Init(void)
  * @param echo_us 输出参数，返回测量到的回波时间(微秒)
  * @return 0=测量超时，1=测量成功
  */
+static void Ultrasonic_ApplyGain(uint8_t gain_code)
+{
+    gain_code &= 0x07U;
+    PGA112_SetGainCode(gain_code);
+    g_ultrasonic_gain_code = gain_code;
+}
+
+static uint8_t Ultrasonic_SelectGainCode(uint32_t echo_us)
+{
+    if(echo_us < 180U)
+    {
+        return PGA112_GAIN_1;
+    }
+    if(echo_us < 360U)
+    {
+        return PGA112_GAIN_2;
+    }
+    if(echo_us < 800U)
+    {
+        return PGA112_GAIN_4;
+    }
+    if(echo_us < 1800U)
+    {
+        return PGA112_GAIN_8;
+    }
+    if(echo_us < 3600U)
+    {
+        return PGA112_GAIN_16;
+    }
+    if(echo_us < 6500U)
+    {
+        return PGA112_GAIN_32;
+    }
+    if(echo_us < 9500U)
+    {
+        return PGA112_GAIN_64;
+    }
+    return PGA112_GAIN_128;
+}
+
+static uint16_t Ultrasonic_GetGainValue(uint8_t gain_code)
+{
+    return PGA112_GetGainValue(gain_code);
+}
+
+static void Ultrasonic_PrepareGain(uint8_t retry_count)
+{
+    uint8_t gain_code = Ultrasonic_SelectGainCode(g_last_echo_us);
+
+    if(retry_count > ULTRASONIC_GAIN_RETRY_MAX)
+    {
+        retry_count = ULTRASONIC_GAIN_RETRY_MAX;
+    }
+
+    gain_code = (uint8_t)(gain_code + retry_count);
+    if(gain_code > PGA112_GAIN_128)
+    {
+        gain_code = PGA112_GAIN_128;
+    }
+
+    Ultrasonic_ApplyGain(gain_code);
+    delay_us(20);
+}
+
 static uint8_t Ultrasonic_MeasureOnce(uint32_t *echo_us)
 {
     uint32_t timeout;
@@ -399,10 +471,12 @@ static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us)
     while(attempts < (ULTRASONIC_FILTER_SAMPLES + 3U) && valid_count < ULTRASONIC_FILTER_SAMPLES)
     {
         uint32_t sample = 0;
+        Ultrasonic_PrepareGain(attempts);
         attempts++;
         if(Ultrasonic_MeasureOnce(&sample) != 0U)
         {
             samples[valid_count++] = sample;  // 保存有效采样
+            g_last_echo_us = sample;
         }
         delay_ms(20);  // 两次测量间隔20ms，防止超声波反射干扰
     }
@@ -431,6 +505,7 @@ static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us)
         *echo_us = samples[valid_count / 2U];
     }
 
+    g_last_echo_us = *echo_us;
     return 1;  // 测量成功
 }
 
@@ -659,12 +734,16 @@ static void MenuHandler_Measure(void)
             // 显示校准状态
             sprintf(status_text, "校准状态: %s", (g_calib_valid != 0U) ? "已校准" : "未校准");
             Show_Text_Line(3, status_text);
+            sprintf(status_text, "前端增益: %ux", Ultrasonic_GetGainValue(g_ultrasonic_gain_code));
+            Show_Text_Line(4, status_text);
         }
         else
         {
             // 测量失败，显示错误信息
             Show_Text_Line(0, "测量失败");
             Show_Text_Line(1, "请检查超声波探头");
+            sprintf(status_text, "前端增益: %ux", Ultrasonic_GetGainValue(g_ultrasonic_gain_code));
+            Show_Text_Line(2, status_text);
         }
         delay_ms(120);  // 测量间隔120ms
     }
@@ -766,6 +845,7 @@ static void MenuHandler_Status(void)
     Show_Value_Line(2, "校准点2(us)", g_calib.point_us[1], "%0.0f");
     Show_Value_Line(3, "校准点3(us)", g_calib.point_us[2], "%0.0f");
     Show_Value_Line(4, "校准点4(us)", g_calib.point_us[3], "%0.0f");
+    Show_Value_Line(5, "当前增益(x)", Ultrasonic_GetGainValue(g_ultrasonic_gain_code), "%0.0f");
 
     // 循环等待按键，直到按下返回键
     while(Ps2KeyValue != KeyValue_Back)
@@ -778,12 +858,12 @@ static void MenuHandler_Status(void)
             if(Ultrasonic_MeasureFiltered(&echo_us) != 0U)
             {
                 // 显示实时测量结果
-                Show_Value_Line(5, "实时测量时间(us)", echo_us, "%0.0f");
-                Show_Value_Line(6, "实时测量距离(mm)", Convert_Time_To_Distance(echo_us), "%0.1f");
+                Show_Value_Line(6, "实时测量时间(us)", echo_us, "%0.0f");
+                Show_Value_Line(7, "实时测量距离(mm)", Convert_Time_To_Distance(echo_us), "%0.1f");
             }
             else
             {
-                Show_Text_Line(5, "测量失败");
+                Show_Text_Line(6, "测量失败");
             }
         }
         delay_ms(20);

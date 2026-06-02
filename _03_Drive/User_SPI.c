@@ -1,136 +1,161 @@
-/* ****************************
- * Project description:
- *
- * SPI initialization file
- *
- * Author: 创新基地 -> 2019 Mao
- *
- * Creation Date: 2021/10/17 - 1
- * ****************************/
- 
- /* ***************************** Include & Define Part     	*****************************/
 #include "User_SPI.h"
 
-/* ***************************** Initialization Part        *****************************
- * 初始化函数区
- * */
+static void User_SPI_SetIdle(void);
+static void User_SPI_ShiftBits(uint32_t tx_data, uint8_t length, uint8_t pha);
 
-// SPI外设初始化(芯片自带SPI)
-void User_SPI_Init()
+void User_SPI_Init(void)
 {
-	SPI_InitTypeDef SPI_InitStruct;
-	
-	// 初始化GPIO口
-	SPI_GPIO_Init( 0 );
-	
-	// 使能SPI1时钟
-	RCC_APB2PeriphClockCmd( RCC_APB2Periph_SPI1 , ENABLE );
-	
-	// 配置SPI1
-	SPI_InitStruct.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_4;	// 波特率四分配
-	SPI_InitStruct.SPI_CPHA = SPI_CPHA_1Edge;												// 第一个边沿捕获
-	SPI_InitStruct.SPI_CPOL = SPI_CPOL_Low;  												// 时钟极性为低电平
-	SPI_InitStruct.SPI_CRCPolynomial = 7; 													// CRC校验(未启用)
-	SPI_InitStruct.SPI_DataSize = SPI_DataSize_16b;									// 16位数据
-	SPI_InitStruct.SPI_Direction = SPI_Direction_1Line_Tx;					// 方向为单工发送数据
-	SPI_InitStruct.SPI_FirstBit = SPI_FirstBit_MSB;									// 高位在前传输
-	SPI_InitStruct.SPI_Mode = SPI_Mode_Master;											// 主机模式
-	SPI_InitStruct.SPI_NSS = SPI_NSS_Soft;													// 软件管理NSS位
-	SPI_Init( SPI1 , &SPI_InitStruct );
-	
-	// 使能SPI1
-	//SPI_Cmd( SPI1 , ENABLE );
+    SPI_GPIO_Init(1U);
+    User_SPI_SetIdle();
 }
 
-// SPI的GPIO口初始化 参数：1>工作模式(0为自带SPI，1为GPIO口模拟SPI)
-void SPI_GPIO_Init( uint8_t mode )
+void SPI_GPIO_Init(uint8_t mode)
 {
-	GPIO_InitTypeDef GPIO_InitStruct;
-	
-	RCC_AHB1PeriphClockCmd( SPI_GPIO_CLK , ENABLE );
-	
-	if( mode == 0 )	// STM32自带的SPI外设配置
-	{
-		//开启GPIO引脚的复用
-		GPIO_PinAFConfig( SPI_Port , SCK_Source | MOSI_Source | MISO_Source | NSS_Source , GPIO_AF_SPI1 );
-		
-		GPIO_InitStruct.GPIO_Pin = SCK_Pin | MOSI_Pin | NSS_Pin;
-		GPIO_InitStruct.GPIO_Mode = GPIO_Mode_AF;
-		GPIO_InitStruct.GPIO_OType = GPIO_OType_PP;
-		GPIO_InitStruct.GPIO_PuPd = GPIO_PuPd_DOWN;
-		GPIO_InitStruct.GPIO_Speed = GPIO_High_Speed;
-		GPIO_Init( SPI_Port , &GPIO_InitStruct );
-		
-		GPIO_InitStruct.GPIO_Pin = MISO_Pin;
-		GPIO_InitStruct.GPIO_Mode = GPIO_Mode_IN;
-		GPIO_Init( SPI_Port , &GPIO_InitStruct );
-	}
-	else if( mode == 1 ) // 利用IO口模拟的SPI通信配置
-	{
-		GPIO_InitStruct.GPIO_Pin = SCK_Pin | MOSI_Pin | NSS_Pin;
-		GPIO_InitStruct.GPIO_Mode = GPIO_Mode_OUT;
-		GPIO_InitStruct.GPIO_OType = GPIO_OType_PP;
-		GPIO_InitStruct.GPIO_PuPd = GPIO_PuPd_NOPULL;
-		GPIO_InitStruct.GPIO_Speed = GPIO_Fast_Speed;
-		GPIO_Init( SPI_Port , &GPIO_InitStruct );
-		
-		GPIO_InitStruct.GPIO_Pin = MISO_Pin;
-		GPIO_InitStruct.GPIO_Mode = GPIO_Mode_IN;
-		GPIO_Init( SPI_Port , &GPIO_InitStruct );
-	}
-	
+    GPIO_InitTypeDef gpio_init;
+    (void)mode;
+
+    RCC_AHB1PeriphClockCmd(USER_SPI_GPIO_CLK, ENABLE);
+
+    gpio_init.GPIO_Pin = USER_SPI_CS_PIN | USER_SPI_SCK_PIN | USER_SPI_DIO_PIN;
+    gpio_init.GPIO_Mode = GPIO_Mode_OUT;
+    gpio_init.GPIO_OType = GPIO_OType_PP;
+    gpio_init.GPIO_PuPd = GPIO_PuPd_UP;
+    gpio_init.GPIO_Speed = GPIO_High_Speed;
+    GPIO_Init(USER_SPI_PORT, &gpio_init);
+
+    User_SPI_SetIdle();
 }
 
-/* ***************************** Custom Function Part       *****************************
- * 自定义函数区
- */
-
-// 发送数据(仅用于GPIO口模拟SPI通信) 参数：1>数据；2>数据长度；3>通信相位(0为下降沿装载数据，1为上升沿)
-void User_SPI_SendData( uint32_t data , uint8_t length , uint8_t pha )
+void User_SPI_StartFrame(void)
 {
-	int8_t count;
-	
-	GPIO_ResetBits( SPI_Port , NSS_Pin );
-	delay_us(1);
-	
-	if( pha == 0 )
-		for( count = length-1 ; count >= 0 ; count -- )
-		{
-			GPIO_SetBits( SPI_Port , SCK_Pin );
-			
-			if( (data >> count ) & 0x00000001 )
-				GPIO_SetBits( SPI_Port , MOSI_Pin );
-			else
-				GPIO_ResetBits( SPI_Port , MOSI_Pin );
-			delay_us(1);
-			
-			GPIO_ResetBits( SPI_Port , SCK_Pin );
-			delay_us(1);
-		
-		}
-	else
-		for( count = length-1 ; count >= 0 ; count -- )
-		{
-			GPIO_ResetBits( SPI_Port , SCK_Pin );
-			
-			if( (data >> count ) & 0x00000001 )
-				GPIO_SetBits( SPI_Port , MOSI_Pin );
-			else
-				GPIO_ResetBits( SPI_Port , MOSI_Pin );
-			delay_us(1);
-			
-			GPIO_SetBits( SPI_Port , SCK_Pin );
-			delay_us(1);
-		
-		}
-	
-	GPIO_SetBits( SPI_Port , NSS_Pin );
-	
+    User_SPI_SetDioOutput();
+    USER_SPI_CS_LOW();
+    delay_us(1);
 }
 
+void User_SPI_EndFrame(void)
+{
+    delay_us(1);
+    USER_SPI_CS_HIGH();
+    User_SPI_SetIdle();
+}
 
+void User_SPI_SendData(uint32_t tx_data, uint8_t length, uint8_t pha)
+{
+    User_SPI_StartFrame();
+    User_SPI_ShiftBits(tx_data, length, pha);
+    User_SPI_EndFrame();
+}
 
+uint16_t User_SPI_Transfer16(uint16_t tx_data)
+{
+    int8_t bit_index;
+    uint16_t rx_data = 0U;
 
+    for(bit_index = 15; bit_index >= 0; bit_index--)
+    {
+        if(((tx_data >> bit_index) & 0x01U) != 0U)
+        {
+            USER_SPI_DIO_HIGH();
+        }
+        else
+        {
+            USER_SPI_DIO_LOW();
+        }
 
+        delay_us(1);
+        USER_SPI_SCK_HIGH();
+        rx_data <<= 1;
+        if(USER_SPI_READ_DIO() != Bit_RESET)
+        {
+            rx_data |= 0x01U;
+        }
+        delay_us(1);
+        USER_SPI_SCK_LOW();
+    }
 
+    return rx_data;
+}
 
+void User_SPI_Write16(uint16_t tx_data)
+{
+    User_SPI_StartFrame();
+    (void)User_SPI_Transfer16(tx_data);
+    User_SPI_EndFrame();
+}
+
+static void User_SPI_SetIdle(void)
+{
+    USER_SPI_CS_HIGH();
+    USER_SPI_SCK_LOW();
+    USER_SPI_DIO_LOW();
+    User_SPI_SetDioOutput();
+}
+
+void User_SPI_SetDioOutput(void)
+{
+    GPIO_InitTypeDef gpio_init;
+
+    gpio_init.GPIO_Pin = USER_SPI_DIO_PIN;
+    gpio_init.GPIO_Mode = GPIO_Mode_OUT;
+    gpio_init.GPIO_OType = GPIO_OType_PP;
+    gpio_init.GPIO_PuPd = GPIO_PuPd_UP;
+    gpio_init.GPIO_Speed = GPIO_High_Speed;
+    GPIO_Init(USER_SPI_PORT, &gpio_init);
+}
+
+void User_SPI_SetDioInput(void)
+{
+    GPIO_InitTypeDef gpio_init;
+
+    gpio_init.GPIO_Pin = USER_SPI_DIO_PIN;
+    gpio_init.GPIO_Mode = GPIO_Mode_IN;
+    gpio_init.GPIO_OType = GPIO_OType_PP;
+    gpio_init.GPIO_PuPd = GPIO_PuPd_UP;
+    gpio_init.GPIO_Speed = GPIO_High_Speed;
+    GPIO_Init(USER_SPI_PORT, &gpio_init);
+}
+
+static void User_SPI_ShiftBits(uint32_t tx_data, uint8_t length, uint8_t pha)
+{
+    int16_t bit_index;
+
+    if((length == 0U) || (length > 32U))
+    {
+        return;
+    }
+
+    for(bit_index = (int16_t)length - 1; bit_index >= 0; bit_index--)
+    {
+        if(pha == 0U)
+        {
+            USER_SPI_SCK_HIGH();
+        }
+        else
+        {
+            USER_SPI_SCK_LOW();
+        }
+
+        if(((tx_data >> bit_index) & 0x01U) != 0U)
+        {
+            USER_SPI_DIO_HIGH();
+        }
+        else
+        {
+            USER_SPI_DIO_LOW();
+        }
+
+        delay_us(1);
+
+        if(pha == 0U)
+        {
+            USER_SPI_SCK_LOW();
+        }
+        else
+        {
+            USER_SPI_SCK_HIGH();
+        }
+
+        delay_us(1);
+    }
+}

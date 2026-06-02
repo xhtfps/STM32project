@@ -66,6 +66,7 @@
 .\output\user_adc.o: .\_03_Drive\User_ADC.h
 .\output\user_adc.o: .\_03_Drive\User_DAC.h
 .\output\user_adc.o: .\_03_Drive\User_SPI.h
+.\output\user_adc.o: .\_03_Drive\User_PGA112.h
 .\output\user_adc.o: .\_03_Drive\User_IIC.h
 .\output\user_adc.o: .\_03_Drive\User_BGD.h
 .\output\user_adc.o: .\_03_Drive\User_DAC8562.h

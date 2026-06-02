@@ -27,6 +27,7 @@
 ".\output\drive_ads1256.o"
 ".\output\drive_fft.o"
 ".\output\user_pga2310.o"
+".\output\user_pga112.o"
 ".\output\user_dac.o"
 ".\output\drive_dac.o"
 ".\output\drive_ad9959.o"

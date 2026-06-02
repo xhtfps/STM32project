@@ -50,13 +50,15 @@ void OS_Init()
 
 int main()
 {
+	OS_Init();
+	User_SPI_Init();
+	PGA112_Init();
 	
 	Task_Create(User_main,&TASK_0_STK[5120-1],1);
 	Task_Create(MyPs2KeyScan,&TASK_1_STK[512-1],0);
 	Task_Create(LED_main,&TASK_5_STK[64-1],2);
 	
 	//OSTaskSuspend(5);    //¹ÒÆðÈÎÎñ
-	OS_Init();
 	OS_Start();
 }
 
