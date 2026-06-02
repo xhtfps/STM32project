@@ -15,6 +15,9 @@
 #define MENU1_CHOICE2    "2. 距离校准"
 #define MENU1_CHOICE3    "3. 系统状态"
 #define MENU_CHOICE_NUM  3
+#define UI_BLANK_TEXT_16 "                                                                "
+#define UI_BLANK_TEXT_24 "                                                "
+#define UI_BLANK_TEXT_32 "                                    "
 
 typedef struct
 {
@@ -38,6 +41,7 @@ static void Init_All(void);
 static void Disp_Main(void);
 static void Change_Menu(uint8_t menu_sign);
 static void Clear_Work_Area(void);
+static void Clear_Work_Text(void);
 static void Draw_Work_Title(char *title);
 static void Draw_Key_Tips(char *tip1, char *tip2);
 static void Show_Text_Line(uint16_t line, char *text);
@@ -103,8 +107,6 @@ static void Init_All(void)
 static void Disp_Main(void)
 {
     uint8_t count;
-
-    LCD_Clear(Black);
     OS_String_Show(272, 16, 32, 1, TITLE_STR);
     LCD_Appoint_Clear(0, 64, 800, 72, White);
     LCD_Appoint_Clear(0, 440, 800, 448, White);
@@ -148,18 +150,32 @@ static void Change_Menu(uint8_t menu_sign)
 
 static void Clear_Work_Area(void)
 {
-    LCD_Appoint_Clear(252, 72, 800, 440, Black);
+    Clear_Work_Text();
+}
+
+static void Clear_Work_Text(void)
+{
+    uint8_t line;
+
+    OS_String_Show(280, 88, 32, 1, UI_BLANK_TEXT_32);
+    for(line = 0; line < 9U; line++)
+    {
+        OS_String_Show(280, (uint16_t)(150 + line * 30), 24, 1, UI_BLANK_TEXT_24);
+    }
+    OS_String_Show(280, 400, 16, 1, UI_BLANK_TEXT_16);
+    OS_String_Show(280, 420, 16, 1, UI_BLANK_TEXT_16);
 }
 
 static void Draw_Work_Title(char *title)
 {
     Clear_Work_Area();
     OS_String_Show(280, 88, 32, 1, title);
-    LCD_Appoint_Clear(280, 128, 760, 130, White);
 }
 
 static void Draw_Key_Tips(char *tip1, char *tip2)
 {
+    OS_String_Show(280, 400, 16, 1, UI_BLANK_TEXT_16);
+    OS_String_Show(280, 420, 16, 1, UI_BLANK_TEXT_16);
     OS_String_Show(280, 400, 16, 1, tip1);
     OS_String_Show(280, 420, 16, 1, tip2);
 }
@@ -167,18 +183,17 @@ static void Draw_Key_Tips(char *tip1, char *tip2)
 static void Show_Text_Line(uint16_t line, char *text)
 {
     uint16_t y = (uint16_t)(150 + line * 30);
-    LCD_Appoint_Clear(280, y, 780, (uint16_t)(y + 24), Black);
+    OS_String_Show(280, y, 24, 1, UI_BLANK_TEXT_24);
     OS_String_Show(280, y, 24, 1, text);
 }
 
 static void Show_Value_Line(uint16_t line, char *label, double value, char *format)
 {
     uint16_t y = (uint16_t)(150 + line * 30);
-    LCD_Appoint_Clear(280, y, 780, (uint16_t)(y + 24), Black);
+    OS_String_Show(280, y, 24, 1, UI_BLANK_TEXT_24);
     OS_String_Show(280, y, 24, 1, label);
     OS_Num_Show(500, y, 24, 1, value, format);
 }
-
 
 static void Ultrasonic_Timer_Init(void)
 {
