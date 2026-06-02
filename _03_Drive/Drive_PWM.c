@@ -149,7 +149,7 @@ void Ultrasonic_PWM_Init(void)
     TIM_TimeBaseInitTypeDef tim_base;
     TIM_OCInitTypeDef tim_oc;
 
-    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA | RCC_AHB1Periph_GPIOD, ENABLE);
+    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA | RCC_AHB1Periph_GPIOC, ENABLE);
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1, ENABLE);
 
     GPIO_PinAFConfig(ULTRASONIC_CH1_GPIO_PORT, ULTRASONIC_CH1_GPIO_SOURCE, ULTRASONIC_TIM1_AF);
@@ -171,7 +171,7 @@ void Ultrasonic_PWM_Init(void)
     gpio.GPIO_Speed = GPIO_Speed_100MHz;
     gpio.GPIO_OType = GPIO_OType_PP;
     gpio.GPIO_PuPd = GPIO_PuPd_UP;
-    GPIO_Init(GPIOD, &gpio);
+    GPIO_Init(GPIOC, &gpio);
 
     /* 8550 高边开关按低电平导通处理：默认关闭发射比较器，打开接收整形比较器。 */
     ULTRASONIC_TX_CMP_OFF();

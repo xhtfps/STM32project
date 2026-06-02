@@ -30,6 +30,7 @@
 #define UI_BLANK_TEXT_16 "                                                                "  // 16号字，64个字符
 #define UI_BLANK_TEXT_24 "                                                "                // 24号字，48个字符
 #define UI_BLANK_TEXT_32 "                                    "                            // 32号字，32个字符
+#define UI_VALUE_BLANK_24 "                        "                                // 数值区域空白
 
 /************************* 数据结构定义 *************************/
 /**
@@ -79,7 +80,9 @@ static void Draw_Work_Title(char *title);
 static void Draw_Key_Tips(char *tip1, char *tip2);
 static void Show_Text_Line(uint16_t line, char *text);
 static void Show_Value_Line(uint16_t line, char *label, double value, char *format);
+static void Show_Value_Only(uint16_t line, double value, char *format);
 
+static void Show_Text_Value_Only(uint16_t line, char *text);
 // 超声波硬件驱动函数
 static void Ultrasonic_Timer_Init(void);
 static void Ultrasonic_Echo_Init(void);
@@ -197,7 +200,6 @@ static void Change_Menu(uint8_t menu_sign)
 {
     uint8_t count;
 
-    Clear_Work_Area();  // 清空右侧工作区
     
     // 重置所有菜单选择标记为"-"
     for(count = 1; count <= MENU_CHOICE_NUM; count++)
@@ -214,6 +216,7 @@ static void Change_Menu(uint8_t menu_sign)
     else
     {
         g_menu_sign = 0;  // 无效索引，返回主菜单
+        Clear_Work_Area();
     }
 
     Ps2KeyValue = KeyValue_Null;  // 清除按键状态
@@ -255,7 +258,6 @@ static void Clear_Work_Text(void)
  */
 static void Draw_Work_Title(char *title)
 {
-    Clear_Work_Area();  // 先清空工作区
     OS_String_Show(280, 88, 32, 1, title);  // 显示标题
 }
 
@@ -266,11 +268,6 @@ static void Draw_Work_Title(char *title)
  */
 static void Draw_Key_Tips(char *tip1, char *tip2)
 {
-    // 先清空提示区域
-    OS_String_Show(280, 400, 16, 1, UI_BLANK_TEXT_16);
-    OS_String_Show(280, 420, 16, 1, UI_BLANK_TEXT_16);
-    
-    // 显示新的提示
     OS_String_Show(280, 400, 16, 1, tip1);
     OS_String_Show(280, 420, 16, 1, tip2);
 }
@@ -282,9 +279,8 @@ static void Draw_Key_Tips(char *tip1, char *tip2)
  */
 static void Show_Text_Line(uint16_t line, char *text)
 {
-    uint16_t y = (uint16_t)(150 + line * 30);  // 计算Y坐标
-    OS_String_Show(280, y, 24, 1, UI_BLANK_TEXT_24);  // 先清空该行
-    OS_String_Show(280, y, 24, 1, text);  // 显示文本
+    uint16_t y = (uint16_t)(150 + line * 30);
+    OS_String_Show(280, y, 24, 1, text);
 }
 
 /**
@@ -296,10 +292,25 @@ static void Show_Text_Line(uint16_t line, char *text)
  */
 static void Show_Value_Line(uint16_t line, char *label, double value, char *format)
 {
-    uint16_t y = (uint16_t)(150 + line * 30);  // 计算Y坐标
-    OS_String_Show(280, y, 24, 1, UI_BLANK_TEXT_24);  // 先清空该行
-    OS_String_Show(280, y, 24, 1, label);  // 显示标签
-    OS_Num_Show(500, y, 24, 1, value, format);  // 显示数值
+    char temp[24];
+    uint16_t y = (uint16_t)(150 + line * 30);
+    sprintf(temp, format, value);
+    OS_String_Show(280, y, 24, 1, label);
+    OS_String_Show(500, y, 24, 1, temp);
+}
+
+static void Show_Value_Only(uint16_t line, double value, char *format)
+{
+    char temp[24];
+    uint16_t y = (uint16_t)(150 + line * 30);
+    sprintf(temp, format, value);
+    OS_String_Show(500, y, 24, 1, temp);
+}
+
+static void Show_Text_Value_Only(uint16_t line, char *text)
+{
+    uint16_t y = (uint16_t)(150 + line * 30);
+    OS_String_Show(500, y, 24, 1, text);
 }
 
 /************************* 超声波硬件驱动函数 *************************/
@@ -762,44 +773,49 @@ static float Convert_Time_To_Distance(uint32_t echo_us)
  */
 static void MenuHandler_Measure(void)
 {
-    char status_text[64];
+    char value_text[24];
 
-    // 绘制测量模式界面
     Draw_Work_Title("测量模式");
     Draw_Key_Tips("确认开始测量", "返回退出测量");
-    Show_Text_Line(0, "测量准备...");
+    OS_String_Show(280, 150, 24, 1, "测量时间(us)");
+    OS_String_Show(280, 180, 24, 1, "测量距离(mm)");
+    OS_String_Show(280, 210, 24, 1, "默认距离(mm)");
+    OS_String_Show(280, 240, 24, 1, "校准状态");
+    OS_String_Show(280, 270, 24, 1, "前端增益(x)");
+    OS_String_Show(280, 300, 24, 1, "提示信息");
+    Show_Text_Value_Only(3, "未校准");
+    Show_Text_Value_Only(4, "008");
+    Show_Text_Value_Only(5, "等待开始");
 
-    // 循环测量，直到按下返回键
     while(Ps2KeyValue != KeyValue_Back)
     {
         uint32_t echo_us = 0;
         if(Ultrasonic_MeasureFiltered(&echo_us) != 0U)
         {
-            // 测量成功，显示结果
             float distance = Convert_Time_To_Distance(echo_us);
-            Show_Value_Line(0, "测量时间(us)", echo_us, "%0.0f");
-            Show_Value_Line(1, "测量距离(mm)", distance, "%0.1f");
-            Show_Value_Line(2, "默认距离(mm)", Convert_Time_To_Distance_Default(echo_us), "%0.1f");
-            
-            // 显示校准状态
-            sprintf(status_text, "校准状态: %s", (g_calib_valid != 0U) ? "已校准" : "未校准");
-            Show_Text_Line(3, status_text);
-            sprintf(status_text, "前端增益: %ux", Ultrasonic_GetGainValue(g_ultrasonic_gain_code));
-            Show_Text_Line(4, status_text);
+            sprintf(value_text, "%05lu", (unsigned long)echo_us);
+            Show_Text_Value_Only(0, value_text);
+            sprintf(value_text, "%06.1f", (double)distance);
+            Show_Text_Value_Only(1, value_text);
+            sprintf(value_text, "%06.1f", (double)Convert_Time_To_Distance_Default(echo_us));
+            Show_Text_Value_Only(2, value_text);
+            Show_Text_Value_Only(3, (g_calib_valid != 0U) ? "已校准" : "未校准");
+            sprintf(value_text, "%03u", Ultrasonic_GetGainValue(g_ultrasonic_gain_code));
+            Show_Text_Value_Only(4, value_text);
+            Show_Text_Value_Only(5, "测量正常");
         }
         else
         {
-            // 测量失败，显示错误信息
-            Show_Text_Line(0, "测量失败");
-            Show_Text_Line(1, "请检查超声波探头");
-            sprintf(status_text, "前端增益: %ux", Ultrasonic_GetGainValue(g_ultrasonic_gain_code));
-            Show_Text_Line(2, status_text);
+            Show_Text_Value_Only(3, "测量失败");
+            sprintf(value_text, "%03u", Ultrasonic_GetGainValue(g_ultrasonic_gain_code));
+            Show_Text_Value_Only(4, value_text);
+            Show_Text_Value_Only(5, "检查探头");
         }
-        delay_ms(120);  // 测量间隔120ms
+        delay_ms(120);
     }
 
-    Ps2KeyValue = KeyValue_Null;  // 清除按键状态
-    Change_Menu(0);               // 返回主菜单
+    Ps2KeyValue = KeyValue_Null;
+    Change_Menu(0);
 }
 
 /**
@@ -807,11 +823,11 @@ static void MenuHandler_Measure(void)
  */
 static void MenuHandler_Calibrate(void)
 {
-    UltrasonicCalibData new_calib;  // 新的校准数据
-    uint8_t step = 0;               // 当前校准步骤(0-3)
-    char line[96];
+    UltrasonicCalibData new_calib;
+    uint8_t step = 0;
+    uint8_t last_step = 0xFFU;
+    char line[24];
 
-    // 初始化新的校准数据
     new_calib.magic = ULTRASONIC_FLASH_MAGIC;
     new_calib.version = ULTRASONIC_FLASH_VERSION;
     new_calib.point_us[0] = 0;
@@ -821,63 +837,76 @@ static void MenuHandler_Calibrate(void)
     new_calib.reserved[0] = 0;
     new_calib.reserved[1] = 0;
 
-    // 绘制校准模式界面
     Draw_Work_Title("校准模式");
     Draw_Key_Tips("确认开始校准", "返回退出校准");
+    OS_String_Show(280, 150, 24, 1, "校准提示");
+    OS_String_Show(280, 180, 24, 1, "当前状态");
+    OS_String_Show(280, 210, 24, 1, "100mm(us)");
+    OS_String_Show(280, 240, 24, 1, "600mm(us)");
+    OS_String_Show(280, 270, 24, 1, "900mm(us)");
+    OS_String_Show(280, 300, 24, 1, "1300mm(us)");
+    OS_String_Show(280, 330, 24, 1, "当前测值(us)");
+    OS_String_Show(280, 360, 24, 1, "校准结果");
+    Show_Text_Value_Only(1, "等待校准");
+    Show_Text_Value_Only(2, "00000");
+    Show_Text_Value_Only(3, "00000");
+    Show_Text_Value_Only(4, "00000");
+    Show_Text_Value_Only(5, "00000");
+    Show_Text_Value_Only(6, "00000");
+    Show_Text_Value_Only(7, "等待校准");
 
-    // 循环校准，直到按下返回键或校准完成
     while(Ps2KeyValue != KeyValue_Back)
     {
-        // 显示当前校准步骤提示
-        sprintf(line, "请将探头对准%umm开始校准", k_calib_distance_mm[step]);
-        Show_Text_Line(0, line);
+        if(step != last_step)
+        {
+            sprintf(line, "对准%04umm", k_calib_distance_mm[step]);
+            Show_Text_Value_Only(0, line);
+            last_step = step;
+        }
 
-        // 按下确认键，执行当前点校准
         if(Ps2KeyValue == KeyValue_Enter)
         {
             uint32_t echo_us = 0;
             Ps2KeyValue = KeyValue_Null;
 
-            Show_Text_Line(1, "正在校准...");
-            
-            // 测量当前点的回波时间
+            Show_Text_Value_Only(0, "开始校准");
+            Show_Text_Value_Only(1, "正在校准");
             if(Ultrasonic_MeasureFiltered(&echo_us) != 0U)
             {
-                // 保存校准值
                 new_calib.point_us[step] = echo_us;
-                sprintf(line, "校准值：%0.0f us", (double)echo_us);
-                Show_Text_Line(1, line);
-                Show_Value_Line((uint16_t)(2 + step), "校准点时间(us)", echo_us, "%0.0f");
+                sprintf(line, "%05lu", (unsigned long)echo_us);
+                Show_Text_Value_Only(6, line);
+                Show_Text_Value_Only((uint16_t)(2 + step), line);
+                Show_Text_Value_Only(1, "采样完成");
 
-                step++;  // 进入下一个校准点
+                step++;
                 if(step >= 4U)
                 {
-                    // 所有校准点完成，校验并保存数据
                     if(Calibration_IsValid(&new_calib) != 0U && Calibration_Save(&new_calib) != 0U)
                     {
-                        // 保存成功，更新全局校准数据
                         g_calib = new_calib;
                         g_calib_valid = 1;
-                        Show_Text_Line(7, "校准完成！");
+                        Show_Text_Value_Only(7, "校准完成");
                     }
                     else
                     {
-                        Show_Text_Line(7, "校准失败！");
+                        Show_Text_Value_Only(7, "校准失败");
                     }
-                    delay_ms(1000);  // 显示结果1秒
-                    break;  // 退出校准流程
+                    delay_ms(1000);
+                    break;
                 }
             }
             else
             {
-                Show_Text_Line(1, "校准失败，测量超时");
+                Show_Text_Value_Only(1, "校准超时");
+                Show_Text_Value_Only(7, "校准失败");
             }
         }
         delay_ms(20);
     }
 
-    Ps2KeyValue = KeyValue_Null;  // 清除按键状态
-    Change_Menu(0);               // 返回主菜单
+    Ps2KeyValue = KeyValue_Null;
+    Change_Menu(0);
 }
 
 /**
@@ -885,42 +914,57 @@ static void MenuHandler_Calibrate(void)
  */
 static void MenuHandler_Status(void)
 {
-    // 绘制系统状态界面
+    char value_text[24];
+
     Draw_Work_Title("系统状态");
     Draw_Key_Tips("确认查看测量", "返回退出查看");
+    OS_String_Show(280, 150, 24, 1, "校准状态");
+    OS_String_Show(280, 180, 24, 1, "校准点1(us)");
+    OS_String_Show(280, 210, 24, 1, "校准点2(us)");
+    OS_String_Show(280, 240, 24, 1, "校准点3(us)");
+    OS_String_Show(280, 270, 24, 1, "校准点4(us)");
+    OS_String_Show(280, 300, 24, 1, "当前增益(x)");
+    OS_String_Show(280, 330, 24, 1, "实时测量时间(us)");
+    OS_String_Show(280, 360, 24, 1, "实时测量距离(mm)");
 
-    // 显示校准状态和校准点数据
-    Show_Text_Line(0, (g_calib_valid != 0U) ? "校准有效" : "未校准/校准数据无效");
-    Show_Value_Line(1, "校准点1(us)", g_calib.point_us[0], "%0.0f");
-    Show_Value_Line(2, "校准点2(us)", g_calib.point_us[1], "%0.0f");
-    Show_Value_Line(3, "校准点3(us)", g_calib.point_us[2], "%0.0f");
-    Show_Value_Line(4, "校准点4(us)", g_calib.point_us[3], "%0.0f");
-    Show_Value_Line(5, "当前增益(x)", Ultrasonic_GetGainValue(g_ultrasonic_gain_code), "%0.0f");
+    Show_Text_Value_Only(0, (g_calib_valid != 0U) ? "校准有效" : "数据无效");
+    sprintf(value_text, "%05lu", (unsigned long)g_calib.point_us[0]);
+    Show_Text_Value_Only(1, value_text);
+    sprintf(value_text, "%05lu", (unsigned long)g_calib.point_us[1]);
+    Show_Text_Value_Only(2, value_text);
+    sprintf(value_text, "%05lu", (unsigned long)g_calib.point_us[2]);
+    Show_Text_Value_Only(3, value_text);
+    sprintf(value_text, "%05lu", (unsigned long)g_calib.point_us[3]);
+    Show_Text_Value_Only(4, value_text);
+    sprintf(value_text, "%03u", Ultrasonic_GetGainValue(g_ultrasonic_gain_code));
+    Show_Text_Value_Only(5, value_text);
+    Show_Text_Value_Only(6, "00000");
+    Show_Text_Value_Only(7, "0000.0");
 
-    // 循环等待按键，直到按下返回键
     while(Ps2KeyValue != KeyValue_Back)
     {
-        // 按下确认键，执行一次实时测量
         if(Ps2KeyValue == KeyValue_Enter)
         {
             uint32_t echo_us = 0;
             Ps2KeyValue = KeyValue_Null;
             if(Ultrasonic_MeasureFiltered(&echo_us) != 0U)
             {
-                // 显示实时测量结果
-                Show_Value_Line(6, "实时测量时间(us)", echo_us, "%0.0f");
-                Show_Value_Line(7, "实时测量距离(mm)", Convert_Time_To_Distance(echo_us), "%0.1f");
+                sprintf(value_text, "%05lu", (unsigned long)echo_us);
+                Show_Text_Value_Only(6, value_text);
+                sprintf(value_text, "%06.1f", (double)Convert_Time_To_Distance(echo_us));
+                Show_Text_Value_Only(7, value_text);
             }
             else
             {
-                Show_Text_Line(6, "测量失败");
+                Show_Text_Value_Only(6, "测量失败");
+                Show_Text_Value_Only(7, "0000.0");
             }
         }
         delay_ms(20);
     }
 
-    Ps2KeyValue = KeyValue_Null;  // 清除按键状态
-    Change_Menu(0);               // 返回主菜单
+    Ps2KeyValue = KeyValue_Null;
+    Change_Menu(0);
 }
 
 /************************* 中断服务函数 *************************/
