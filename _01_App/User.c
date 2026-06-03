@@ -6,8 +6,6 @@
 // 最小有效回波时间(微秒)：过滤近距离干扰和硬件噪声
 #define ULTRASONIC_MIN_VALID_US      20U
 #define ULTRASONIC_BLANKING_US       220U   // 发射+恢复后的有效接收起始窗
-#define ULTRASONIC_PEAK_RATIO_NUM    1U     // 峰值位于回波脉冲包络中的经验位置k
-#define ULTRASONIC_PEAK_RATIO_DEN    2U
 // 滤波采样次数：采用多次采样+去极值平均，提高测量稳定性
 #define ULTRASONIC_FILTER_SAMPLES    9U
 #define ULTRASONIC_GAIN_RETRY_MAX    3U
@@ -88,7 +86,6 @@ static void Ultrasonic_Timer_Init(void);
 static void Ultrasonic_Echo_Init(void);
 static void Ultrasonic_ApplyGain(uint8_t gain_code);
 static uint8_t Ultrasonic_SelectGainCode(uint32_t echo_us);
-static uint16_t Ultrasonic_GetGainValue(uint8_t gain_code);
 static uint32_t Ultrasonic_EstimatePeakTime(uint32_t rise_us, uint32_t fall_us);
 static void Ultrasonic_PrepareGain(uint8_t retry_count);
 static uint8_t Ultrasonic_MeasureOnce(uint32_t *echo_us);
@@ -424,10 +421,7 @@ static uint8_t Ultrasonic_SelectGainCode(uint32_t echo_us)
     return PGA112_GAIN_128;
 }
 
-static uint16_t Ultrasonic_GetGainValue(uint8_t gain_code)
-{
-    return PGA112_GetGainValue(gain_code);
-}
+
 static uint32_t Ultrasonic_EstimatePeakTime(uint32_t rise_us, uint32_t fall_us)
 {
     uint32_t width;
@@ -438,7 +432,7 @@ static uint32_t Ultrasonic_EstimatePeakTime(uint32_t rise_us, uint32_t fall_us)
     }
 
     width = fall_us - rise_us;
-    return rise_us + (width * ULTRASONIC_PEAK_RATIO_NUM) / ULTRASONIC_PEAK_RATIO_DEN;
+    return rise_us + width / 2U;
 }
 
 static void Ultrasonic_PrepareGain(uint8_t retry_count)
@@ -545,21 +539,14 @@ static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us)
     }
 
     Sort_Samples(samples, valid_count);
-    if(valid_count >= 5U)
+    if(valid_count >= 3U)
     {
-        for(index = 2; index < (uint8_t)(valid_count - 2U); index++)
+        uint8_t trim = (valid_count >= 5U) ? 2U : 1U;
+        for(index = trim; index < (uint8_t)(valid_count - trim); index++)
         {
             sum += samples[index];
         }
-        *echo_us = sum / (valid_count - 4U);
-    }
-    else if(valid_count >= 3U)
-    {
-        for(index = 1; index < (uint8_t)(valid_count - 1U); index++)
-        {
-            sum += samples[index];
-        }
-        *echo_us = sum / (valid_count - 2U);
+        *echo_us = sum / (valid_count - (uint8_t)(trim * 2U));
     }
     else
     {
@@ -578,20 +565,18 @@ static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us)
 static void Sort_Samples(uint32_t *data, uint8_t length)
 {
     uint8_t i;
-    uint8_t j;
 
-    for(i = 0; i < length; i++)
+    for(i = 1U; i < length; i++)
     {
-        for(j = (uint8_t)(i + 1U); j < length; j++)
+        uint32_t key = data[i];
+        int8_t j = (int8_t)i - 1;
+
+        while(j >= 0 && data[j] > key)
         {
-            if(data[j] < data[i])
-            {
-                // 交换两个元素
-                uint32_t temp = data[i];
-                data[i] = data[j];
-                data[j] = temp;
-            }
+            data[j + 1] = data[j];
+            j--;
         }
+        data[j + 1] = key;
     }
 }
 
@@ -658,7 +643,7 @@ static uint8_t Calibration_Save(const UltrasonicCalibData *calib)
     FLASH_ClearFlag(FLASH_FLAG_EOP | FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR |
                     FLASH_FLAG_PGAERR | FLASH_FLAG_PGPERR | FLASH_FLAG_PGSERR);
     
-    // 擦除Sector11(必须先擦除才能写入)
+    // 擦除Sector11(必须先擦除才能写入)。注意：该扇区为128KB，频繁校准会加速Flash擦写磨损。
     status = FLASH_EraseSector(FLASH_Sector_11, VoltageRange_3);
     
     if(status == FLASH_COMPLETE)
@@ -723,13 +708,9 @@ static float Convert_Time_To_Distance(uint32_t echo_us)
     }
 
     // 确定当前时间所在的校准区间
-    if(echo_us <= g_calib.point_us[0])
+    if(echo_us <= g_calib.point_us[1])
     {
-        index = 0;  // 小于第一个校准点，使用第一区间外推
-    }
-    else if(echo_us <= g_calib.point_us[1])
-    {
-        index = 0;  // 在第一区间内
+        index = 0;  // 在第一区间内或小于第一个校准点时外推
     }
     else if(echo_us <= g_calib.point_us[2])
     {
@@ -800,14 +781,14 @@ static void MenuHandler_Measure(void)
             sprintf(value_text, "%06.1f", (double)Convert_Time_To_Distance_Default(echo_us));
             Show_Text_Value_Only(2, value_text);
             Show_Text_Value_Only(3, (g_calib_valid != 0U) ? "已校准" : "未校准");
-            sprintf(value_text, "%03u", Ultrasonic_GetGainValue(g_ultrasonic_gain_code));
+            sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
             Show_Text_Value_Only(4, value_text);
             Show_Text_Value_Only(5, "测量正常");
         }
         else
         {
             Show_Text_Value_Only(3, "测量失败");
-            sprintf(value_text, "%03u", Ultrasonic_GetGainValue(g_ultrasonic_gain_code));
+            sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
             Show_Text_Value_Only(4, value_text);
             Show_Text_Value_Only(5, "检查探头");
         }
@@ -936,7 +917,7 @@ static void MenuHandler_Status(void)
     Show_Text_Value_Only(3, value_text);
     sprintf(value_text, "%05lu", (unsigned long)g_calib.point_us[3]);
     Show_Text_Value_Only(4, value_text);
-    sprintf(value_text, "%03u", Ultrasonic_GetGainValue(g_ultrasonic_gain_code));
+    sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
     Show_Text_Value_Only(5, value_text);
     Show_Text_Value_Only(6, "00000");
     Show_Text_Value_Only(7, "0000.0");

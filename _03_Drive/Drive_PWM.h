@@ -17,7 +17,7 @@
 
 #define ULTRASONIC_TIM1_AF             GPIO_AF_TIM1
 
-/***** 超声波发射/接收比较器控制引脚 *****/
+/***** 超声波发射接收比较器控制引脚 *****/
 #define ULTRASONIC_RX_CMP_CTRL_PORT    GPIOC
 #define ULTRASONIC_RX_CMP_CTRL_PIN     GPIO_Pin_7
 #define ULTRASONIC_TX_CMP_CTRL_PORT    GPIOC
@@ -46,8 +46,5 @@ void PWM1_CCR_Set(double xccr1);
 void PWM2_Init(void);
 void Ultrasonic_PWM_Init(void);
 void Ultrasonic_FireBurst(void);
+
 #endif
-
-
-
-
