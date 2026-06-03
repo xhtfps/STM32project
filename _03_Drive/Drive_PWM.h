@@ -6,16 +6,16 @@
 
 /* 全局宏定义 ----------------------------------------------------------------*/
 
-/***** 超声波测距 TIM1 引脚映射 *****/
-#define ULTRASONIC_CH1_GPIO_PORT       GPIOA
-#define ULTRASONIC_CH1_GPIO_PIN        GPIO_Pin_8
-#define ULTRASONIC_CH1_GPIO_SOURCE     GPIO_PinSource8
+/***** 超声波测距 TIM4 引脚映射 *****/
+#define ULTRASONIC_CH1_GPIO_PORT       GPIOD
+#define ULTRASONIC_CH1_GPIO_PIN        GPIO_Pin_12
+#define ULTRASONIC_CH1_GPIO_SOURCE     GPIO_PinSource12
 
-#define ULTRASONIC_CH2_GPIO_PORT       GPIOA
-#define ULTRASONIC_CH2_GPIO_PIN        GPIO_Pin_9
-#define ULTRASONIC_CH2_GPIO_SOURCE     GPIO_PinSource9
+#define ULTRASONIC_CH2_GPIO_PORT       GPIOD
+#define ULTRASONIC_CH2_GPIO_PIN        GPIO_Pin_13
+#define ULTRASONIC_CH2_GPIO_SOURCE     GPIO_PinSource13
 
-#define ULTRASONIC_TIM1_AF             GPIO_AF_TIM1
+#define ULTRASONIC_TIM_AF              GPIO_AF_TIM4
 
 /***** 超声波发射接收比较器控制引脚 *****/
 #define ULTRASONIC_RX_CMP_CTRL_PORT    GPIOC
@@ -30,8 +30,8 @@
 
 /***** 超声波测距 PWM 时序参数 *****/
 #define ULTRASONIC_PWM_FREQ_HZ         40000U
-#define ULTRASONIC_TIM1_CLK_HZ         168000000U
-#define ULTRASONIC_PWM_PERIOD_TICKS    (ULTRASONIC_TIM1_CLK_HZ / ULTRASONIC_PWM_FREQ_HZ)
+#define ULTRASONIC_TIM_CLK_HZ          84000000U
+#define ULTRASONIC_PWM_PERIOD_TICKS    (ULTRASONIC_TIM_CLK_HZ / ULTRASONIC_PWM_FREQ_HZ)
 #define ULTRASONIC_PWM_PULSE_TICKS     (ULTRASONIC_PWM_PERIOD_TICKS / 2U)
 #define ULTRASONIC_BURST_CYCLES        8U
 #define ULTRASONIC_RX_RECOVER_US       15U

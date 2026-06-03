@@ -31,45 +31,45 @@ void PWM1_Init(u16 arr,u16 psc)
 	TIM_TimeBaseInitTypeDef  TIM_TimeBaseStructure;
 	TIM_OCInitTypeDef  TIM_OCInitStructure;
 	
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1,ENABLE);  	
-	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE); 	
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4,ENABLE);  	
+	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOD, ENABLE); 	
 	
-	GPIO_PinAFConfig(GPIOA,GPIO_PinSource8,GPIO_AF_TIM1);
-	GPIO_PinAFConfig(GPIOA,GPIO_PinSource9,GPIO_AF_TIM1);
+	GPIO_PinAFConfig(GPIOD,GPIO_PinSource12,GPIO_AF_TIM4);
+	GPIO_PinAFConfig(GPIOD,GPIO_PinSource13,GPIO_AF_TIM4);
 	
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_8|GPIO_Pin_9;
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_12|GPIO_Pin_13;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;       
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;	
 	GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;      
 	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;        
-	GPIO_Init(GPIOA,&GPIO_InitStructure);
-	GPIO_SetBits(GPIOA,GPIO_Pin_8);
-	GPIO_SetBits(GPIOA,GPIO_Pin_9);
+	GPIO_Init(GPIOD,&GPIO_InitStructure);
+	GPIO_SetBits(GPIOD,GPIO_Pin_12);
+	GPIO_SetBits(GPIOD,GPIO_Pin_13);
 	
 	TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1; 
 	TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;  
 	TIM_TimeBaseStructure.TIM_Prescaler = psc;   
 	TIM_TimeBaseStructure.TIM_RepetitionCounter = 0;
 	TIM_TimeBaseStructure.TIM_Period = arr;    
-	TIM_TimeBaseInit(TIM1,&TIM_TimeBaseStructure);
+	TIM_TimeBaseInit(TIM4,&TIM_TimeBaseStructure);
 	
 	TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Set;     
 	TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
 	TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_Low;
 	TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
 	TIM_OCInitStructure.TIM_Pulse = 0;                   
-	TIM_OC1Init(TIM1, &TIM_OCInitStructure);
+	TIM_OC1Init(TIM4, &TIM_OCInitStructure);
 	
 	TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Set;     
 	TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM2;
-	TIM_OC2Init(TIM1, &TIM_OCInitStructure);
+	TIM_OC2Init(TIM4, &TIM_OCInitStructure);
 	
-	TIM_OC1PreloadConfig(TIM1, TIM_OCPreload_Enable);  
-	TIM_OC2PreloadConfig(TIM1, TIM_OCPreload_Enable);  
+	TIM_OC1PreloadConfig(TIM4, TIM_OCPreload_Enable);  
+	TIM_OC2PreloadConfig(TIM4, TIM_OCPreload_Enable);  
 	
-	TIM_ARRPreloadConfig(TIM1,ENABLE);
-	TIM_Cmd(TIM1, ENABLE);  
-	TIM_CtrlPWMOutputs(TIM1,ENABLE);
+	TIM_ARRPreloadConfig(TIM4,ENABLE);
+	TIM_Cmd(TIM4, ENABLE);  
+	
 }
 
 /** ----------------------------------------------------------------------------
@@ -81,7 +81,7 @@ void PWM1_Init(u16 arr,u16 psc)
 void PWM1_CCR_Set(double xccr1)
 {
 	xccr1 = xccr1*PWM1_PERIOD;
-	TIM1->CCR1 = (u16)xccr1;
+	TIM4->CCR1 = (u16)xccr1;
 }
 
 /** ----------------------------------------------------------------------------
@@ -98,21 +98,21 @@ void PWM2_Init(void)
 	NVIC_InitTypeDef NVIC_InitStructure;
 	
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM5,ENABLE);  	
-	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE); 	
+    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
 	
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_1; 
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;	
 	GPIO_InitStructure.GPIO_OType = GPIO_OType_PP; 
 	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_DOWN; 
-	GPIO_Init(GPIOA,&GPIO_InitStructure); 
+    GPIO_Init(GPIOA,&GPIO_InitStructure);
 	
 	GPIO_PinAFConfig(GPIOA,GPIO_PinSource1,GPIO_AF_TIM5); 
 	
-	TIM_TimeBaseStructure.TIM_Prescaler=168-1;  
-	TIM_TimeBaseStructure.TIM_CounterMode=TIM_CounterMode_Up; 
-	TIM_TimeBaseStructure.TIM_Period=1000000-1;  
-	TIM_TimeBaseStructure.TIM_ClockDivision=TIM_CKD_DIV1;
+	TIM_TimeBaseStructure.TIM_Prescaler = 168-1;  
+	TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up; 
+	TIM_TimeBaseStructure.TIM_Period = 1000000-1;  
+	TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
 	TIM_TimeBaseInit(TIM5,&TIM_TimeBaseStructure);
 	
 	TIM5_ICInitStructure.TIM_Channel = TIM_Channel_2; 
@@ -126,15 +126,15 @@ void PWM2_Init(void)
 	TIM_Cmd(TIM5,ENABLE ); 	
 	
 	NVIC_InitStructure.NVIC_IRQChannel = TIM5_IRQn;
-	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority=2;
-	NVIC_InitStructure.NVIC_IRQChannelSubPriority =1;		
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2;
+	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;		
 	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;			
 	NVIC_Init(&NVIC_InitStructure);	
 }
 
 /** ----------------------------------------------------------------------------
     @FunctionName  : Ultrasonic_PWM_Init()
-    @Description   : 超声波测距TIM1 PWM初始化（CH1=PA8, CH2=PE11）
+    @Description   : 超声波测距 TIM4 PWM 初始化（CH1=PD12, CH2=PD13）
     @Data          : 2026/6/1
     ------------------------------------------------------------------------------*/
 void Ultrasonic_PWM_Init(void)
@@ -143,11 +143,11 @@ void Ultrasonic_PWM_Init(void)
     TIM_TimeBaseInitTypeDef tim_base;
     TIM_OCInitTypeDef tim_oc;
 
-    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA | RCC_AHB1Periph_GPIOC, ENABLE);
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1, ENABLE);
+    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOD | RCC_AHB1Periph_GPIOC, ENABLE);
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);
 
-    GPIO_PinAFConfig(ULTRASONIC_CH1_GPIO_PORT, ULTRASONIC_CH1_GPIO_SOURCE, ULTRASONIC_TIM1_AF);
-    GPIO_PinAFConfig(ULTRASONIC_CH2_GPIO_PORT, ULTRASONIC_CH2_GPIO_SOURCE, ULTRASONIC_TIM1_AF);
+    GPIO_PinAFConfig(ULTRASONIC_CH1_GPIO_PORT, ULTRASONIC_CH1_GPIO_SOURCE, ULTRASONIC_TIM_AF);
+    GPIO_PinAFConfig(ULTRASONIC_CH2_GPIO_PORT, ULTRASONIC_CH2_GPIO_SOURCE, ULTRASONIC_TIM_AF);
 
     GPIO_StructInit(&gpio);
     gpio.GPIO_Pin = ULTRASONIC_CH1_GPIO_PIN;
@@ -176,8 +176,8 @@ void Ultrasonic_PWM_Init(void)
     tim_base.TIM_CounterMode = TIM_CounterMode_Up;
     tim_base.TIM_Period = ULTRASONIC_PWM_PERIOD_TICKS - 1U;
     tim_base.TIM_ClockDivision = TIM_CKD_DIV1;
-    tim_base.TIM_RepetitionCounter = ULTRASONIC_BURST_CYCLES - 1U;
-    TIM_TimeBaseInit(TIM1, &tim_base);
+    tim_base.TIM_RepetitionCounter = 0;
+    TIM_TimeBaseInit(TIM4, &tim_base);
 
     TIM_OCStructInit(&tim_oc);
     tim_oc.TIM_OCMode = TIM_OCMode_PWM1;
@@ -185,18 +185,16 @@ void Ultrasonic_PWM_Init(void)
     tim_oc.TIM_OCPolarity = TIM_OCPolarity_High;
     tim_oc.TIM_OCIdleState = TIM_OCIdleState_Reset;
     tim_oc.TIM_Pulse = ULTRASONIC_PWM_PULSE_TICKS;
-    TIM_OC1Init(TIM1, &tim_oc);
+    TIM_OC1Init(TIM4, &tim_oc);
 
     tim_oc.TIM_OCMode = TIM_OCMode_PWM2;
     tim_oc.TIM_Pulse = ULTRASONIC_PWM_PULSE_TICKS;
-    TIM_OC2Init(TIM1, &tim_oc);
+    TIM_OC2Init(TIM4, &tim_oc);
 
-    TIM_OC1PreloadConfig(TIM1, TIM_OCPreload_Enable);
-    TIM_OC2PreloadConfig(TIM1, TIM_OCPreload_Enable);
-    TIM_ARRPreloadConfig(TIM1, ENABLE);
-    TIM_SelectOnePulseMode(TIM1, TIM_OPMode_Single);
-    TIM_CtrlPWMOutputs(TIM1, ENABLE);
-    TIM_Cmd(TIM1, DISABLE);
+    TIM_OC1PreloadConfig(TIM4, TIM_OCPreload_Enable);
+    TIM_OC2PreloadConfig(TIM4, TIM_OCPreload_Enable);
+    TIM_ARRPreloadConfig(TIM4, ENABLE);
+    TIM_Cmd(TIM4, DISABLE);
 }
 
 /** ----------------------------------------------------------------------------
@@ -210,16 +208,11 @@ void Ultrasonic_FireBurst(void)
     ULTRASONIC_RX_CMP_OFF();
     ULTRASONIC_TX_CMP_ON();
 
-    TIM_SetCounter(TIM1, 0);
-    TIM_ClearFlag(TIM1, TIM_FLAG_Update);
-    TIM_Cmd(TIM1, ENABLE);
-
-    while(TIM_GetFlagStatus(TIM1, TIM_FLAG_Update) == RESET)
-    {
-    }
-
-    TIM_ClearFlag(TIM1, TIM_FLAG_Update);
-    TIM_Cmd(TIM1, DISABLE);
+    TIM_SetCounter(TIM4, 0);
+    TIM_ClearFlag(TIM4, TIM_FLAG_Update);
+    TIM_Cmd(TIM4, ENABLE);
+    delay_us((uint32_t)((1000000U / ULTRASONIC_PWM_FREQ_HZ) * ULTRASONIC_BURST_CYCLES));
+    TIM_Cmd(TIM4, DISABLE);
 
     ULTRASONIC_TX_CMP_OFF();
     delay_us(ULTRASONIC_RX_RECOVER_US);
