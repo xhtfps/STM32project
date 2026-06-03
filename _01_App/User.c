@@ -329,6 +329,7 @@ static void Ultrasonic_Timer_Init(void)
     TIM_TimeBaseInit(TIM5, &tim_base);
     
     TIM_Cmd(TIM5, ENABLE);  // 启动定时器
+    
 }
 
 /**
@@ -792,6 +793,7 @@ static void MenuHandler_Measure(void)
             Show_Text_Value_Only(4, value_text);
             Show_Text_Value_Only(5, "检查探头");
         }
+        
         delay_ms(120);
     }
 
