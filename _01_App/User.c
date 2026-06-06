@@ -18,13 +18,13 @@
 #define ULTRASONIC_FLASH_VERSION     0x00010001U  // 主版本1.0，次版本1
 
 /************************* 屏幕显示常量定义 *************************/
-#define TITLE_STR        "超声波测距仪"       // 主界面标题
-#define MODEL_VER_STR    "型号：HC-SR04"      // 硬件型号
-#define USER_VER_STR     "版本：V1.0"         // 软件版本
-#define MENU1_CHOICE1    "1. 实时测量"        // 菜单选项1
-#define MENU1_CHOICE2    "2. 距离校准"        // 菜单选项2
-#define MENU1_CHOICE3    "3. 系统状态"        // 菜单选项3
-#define MENU1_CHOICE4    "4. 程控调节"    // 菜单选项4
+#define TITLE_STR        "超声波测距仪"         // 主界面标题
+#define MODEL_VER_STR    "型号：HC-SR04"       // 硬件型号
+#define USER_VER_STR     "版本：V1.0"          // 软件版本
+#define MENU1_CHOICE1    "1. 实时测量"         // 菜单选项1
+#define MENU1_CHOICE2    "2. 距离校准"         // 菜单选项2
+#define MENU1_CHOICE3    "3. 系统状态"         // 菜单选项3
+#define MENU1_CHOICE4    "4. 程控调节"         // 菜单选项4
 #define MENU_CHOICE_NUM  4                    // 菜单选项总数
 // 不同字号的空白字符串，用于快速清屏指定区域
 #define UI_BLANK_TEXT_16 "                                                                "  // 16号字，64个字符

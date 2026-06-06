@@ -28,7 +28,7 @@
 #define PGA112_GAIN_64              0x06U
 #define PGA112_GAIN_128             0x07U
 
-#define PGA112_ULTRASONIC_CHANNEL   PGA112_CHANNEL_CH1
+#define PGA112_ULTRASONIC_CHANNEL   PGA112_CHANNEL_CH0
 #define PGA112_DEFAULT_GAIN_CODE    PGA112_GAIN_8
 
 void PGA112_Init(void);                                             // 初始化PGA112，设置默认增益和通道

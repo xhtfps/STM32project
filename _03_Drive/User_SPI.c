@@ -18,7 +18,7 @@ void SPI_GPIO_Init(uint8_t mode)
 
     gpio_init.GPIO_Pin = USER_SPI_CS_PIN | USER_SPI_SCK_PIN | USER_SPI_DIO_PIN;
     gpio_init.GPIO_Mode = GPIO_Mode_OUT;
-    gpio_init.GPIO_OType = GPIO_OType_PP;
+    gpio_init.GPIO_OType = GPIO_OType_PP; 
     gpio_init.GPIO_PuPd = GPIO_PuPd_UP;
     gpio_init.GPIO_Speed = GPIO_High_Speed;
     GPIO_Init(USER_SPI_PORT, &gpio_init);
