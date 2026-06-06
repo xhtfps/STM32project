@@ -197,6 +197,23 @@ void Ultrasonic_PWM_Init(void)
     TIM_Cmd(TIM4, DISABLE);
 }
 
+void Ultrasonic_PWM_OutputEnable(void)
+{
+    ULTRASONIC_RX_CMP_OFF();
+    ULTRASONIC_TX_CMP_ON();
+    TIM_SetCounter(TIM4, 0);
+    TIM_ClearFlag(TIM4, TIM_FLAG_Update);
+    TIM_Cmd(TIM4, ENABLE);
+}
+
+void Ultrasonic_PWM_OutputDisable(void)
+{
+    TIM_Cmd(TIM4, DISABLE);
+    ULTRASONIC_TX_CMP_OFF();
+    delay_us(ULTRASONIC_RX_RECOVER_US);
+    ULTRASONIC_RX_CMP_ON();
+}
+
 /** ----------------------------------------------------------------------------
     @FunctionName  : Ultrasonic_FireBurst()
     @Description   : 触发一次超声波脉冲串（阻塞等待发送完成）

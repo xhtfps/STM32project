@@ -72,3 +72,4 @@
 .\output\user.o: .\_03_Drive\User_DAC8562.h
 .\output\user.o: .\_03_Drive\User_AD8370.h
 .\output\user.o: .\_03_Drive\User_PGA2310.h
+.\output\user.o: .\_03_Drive\Drive_PWM.h

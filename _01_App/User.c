@@ -1,4 +1,5 @@
 #include "User.h"
+#include "Drive_PWM.h"
 
 /************************* 超声波模块参数配置 *************************/
 // 测量超时时间(微秒)：对应最大测量距离约2米(声速343m/s，往返时间=2*2/343≈11662us)
@@ -23,7 +24,8 @@
 #define MENU1_CHOICE1    "1. 实时测量"        // 菜单选项1
 #define MENU1_CHOICE2    "2. 距离校准"        // 菜单选项2
 #define MENU1_CHOICE3    "3. 系统状态"        // 菜单选项3
-#define MENU_CHOICE_NUM  3                    // 菜单选项总数
+#define MENU1_CHOICE4    "4. 程控调节"    // 菜单选项4
+#define MENU_CHOICE_NUM  4                    // 菜单选项总数
 // 不同字号的空白字符串，用于快速清屏指定区域
 #define UI_BLANK_TEXT_16 "                                                                "  // 16号字，64个字符
 #define UI_BLANK_TEXT_24 "                                                "                // 24号字，48个字符
@@ -63,7 +65,7 @@ static UltrasonicCalibData g_calib = {0};       // 当前生效的校准数据
 static uint8_t g_calib_valid = 0;               // 校准数据有效标志：1=有效
 
 // UI状态变量
-static uint8_t g_menu_sign = 0;                 // 当前菜单索引：0=主菜单，1=测量，2=校准，3=状态
+static uint8_t g_menu_sign = 0;                 // 当前菜单索引：0=主菜单，1=测量，2=校准，3=状态，4=PWM测试
 
 /************************* 函数声明 *************************/
 // 系统初始化与主界面函数
@@ -103,6 +105,7 @@ static float Convert_Time_To_Distance_Default(uint32_t echo_us);
 static void MenuHandler_Measure(void);
 static void MenuHandler_Calibrate(void);
 static void MenuHandler_Status(void);
+static void MenuHandler_PGA_Test(void);
 
 /************************* 主函数 *************************/
 /**
@@ -119,7 +122,7 @@ void User_main(void)
         switch(g_menu_sign)
         {
             case 0:  // 主菜单状态：处理按键选择
-                if(Ps2KeyValue >= KeyValue_1 && Ps2KeyValue <= KeyValue_3)
+                if(Ps2KeyValue >= KeyValue_1 && Ps2KeyValue <= KeyValue_4)
                 {
                     // 根据按键值切换到对应菜单
                     Change_Menu((uint8_t)(Ps2KeyValue - KeyValue_0));
@@ -133,6 +136,9 @@ void User_main(void)
                 break;
             case 3:  // 系统状态模式
                 MenuHandler_Status();
+                break;
+            case 4:  // PWM输出测试模式
+                MenuHandler_PGA_Test();
                 break;
             default: // 异常状态：返回主菜单
                 g_menu_sign = 0;
@@ -187,6 +193,7 @@ static void Disp_Main(void)
     OS_String_Show(60, 96, 32, 1, MENU1_CHOICE1);
     OS_String_Show(60, 160, 32, 1, MENU1_CHOICE2);
     OS_String_Show(60, 224, 32, 1, MENU1_CHOICE3);
+    OS_String_Show(60, 288, 32, 1, MENU1_CHOICE4);
 }
 
 /**
@@ -950,7 +957,97 @@ static void MenuHandler_Status(void)
     Change_Menu(0);
 }
 
+
+/**
+ * @brief PWM输出测试模式处理函数
+ */
+/**
+ * @brief 程控增益手动调节模式处理函数
+ */
+static void MenuHandler_PGA_Test(void)
+{
+    uint8_t gain_index = 3U;
+    const uint8_t gain_codes[8] =
+    {
+        PGA112_GAIN_1,
+        PGA112_GAIN_2,
+        PGA112_GAIN_4,
+        PGA112_GAIN_8,
+        PGA112_GAIN_16,
+        PGA112_GAIN_32,
+        PGA112_GAIN_64,
+        PGA112_GAIN_128
+    };
+    char value_text[24];
+
+    Ultrasonic_PWM_OutputEnable();
+    Ultrasonic_ApplyGain(gain_codes[gain_index]);
+
+    Draw_Work_Title("程控增益调节");
+    Draw_Key_Tips("+/-调节增益", "Back退出并关闭PWM");
+    OS_String_Show(280, 150, 24, 1, "PWM输出状态");
+    OS_String_Show(280, 180, 24, 1, "输出方式");
+    OS_String_Show(280, 210, 24, 1, "输出频率(Hz)");
+    OS_String_Show(280, 240, 24, 1, "输出占空比(%)");
+    OS_String_Show(280, 270, 24, 1, "当前增益(x)");
+    OS_String_Show(280, 300, 24, 1, "增益档位");
+    OS_String_Show(280, 330, 24, 1, "波形说明");
+    OS_String_Show(280, 360, 24, 1, "当前提示");
+
+    Show_Text_Value_Only(0, "开启");
+    Show_Text_Value_Only(1, "互补PWM");
+    Show_Text_Value_Only(2, "040000");
+    Show_Text_Value_Only(3, "050");
+    sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
+    Show_Text_Value_Only(4, value_text);
+    Show_Text_Value_Only(5, "1/2/4/8/16/32/64/128");
+    Show_Text_Value_Only(6, "PD12/PD13输出");
+    Show_Text_Value_Only(7, "等待调节");
+
+    while(Ps2KeyValue != KeyValue_Back)
+    {
+        if(Ps2KeyValue == KeyValue_Add)
+        {
+            Ps2KeyValue = KeyValue_Null;
+            if(gain_index < 7U)
+            {
+                gain_index++;
+                Ultrasonic_ApplyGain(gain_codes[gain_index]);
+                sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
+                Show_Text_Value_Only(4, value_text);
+                Show_Text_Value_Only(7, "增益已调大");
+            }
+            else
+            {
+                Show_Text_Value_Only(7, "已到最大增益");
+            }
+        }
+        else if(Ps2KeyValue == KeyValue_Minus)
+        {
+            Ps2KeyValue = KeyValue_Null;
+            if(gain_index > 0U)
+            {
+                gain_index--;
+                Ultrasonic_ApplyGain(gain_codes[gain_index]);
+                sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
+                Show_Text_Value_Only(4, value_text);
+                Show_Text_Value_Only(7, "增益已调小");
+            }
+            else
+            {
+                Show_Text_Value_Only(7, "已到最小增益");
+            }
+        }
+        delay_ms(20);
+    }
+
+    Ultrasonic_PWM_OutputDisable();
+    Ps2KeyValue = KeyValue_Null;
+    Change_Menu(0);
+}
+
 /************************* 中断服务函数 *************************/
+
 /**
  * @brief EXTI0外部中断服务函数
  * @note 当回波引脚(PC0)出现边沿时触发：上升沿记录起点，下降沿记录终点

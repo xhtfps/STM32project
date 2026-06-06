@@ -46,5 +46,7 @@ void PWM1_CCR_Set(double xccr1);
 void PWM2_Init(void);
 void Ultrasonic_PWM_Init(void);
 void Ultrasonic_FireBurst(void);
+void Ultrasonic_PWM_OutputEnable(void);
+void Ultrasonic_PWM_OutputDisable(void);
 
 #endif
