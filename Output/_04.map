@@ -565,8 +565,8 @@ Section Cross References
     drive_pwm.o(i.PWM2_Init) refers to stm32f4xx_tim.o(i.TIM_ITConfig) for TIM_ITConfig
     drive_pwm.o(i.PWM2_Init) refers to stm32f4xx_tim.o(i.TIM_Cmd) for TIM_Cmd
     drive_pwm.o(i.PWM2_Init) refers to misc.o(i.NVIC_Init) for NVIC_Init
-    drive_pwm.o(i.Ultrasonic_FireBurst) refers to stm32f4xx_gpio.o(i.GPIO_ResetBits) for GPIO_ResetBits
     drive_pwm.o(i.Ultrasonic_FireBurst) refers to stm32f4xx_gpio.o(i.GPIO_SetBits) for GPIO_SetBits
+    drive_pwm.o(i.Ultrasonic_FireBurst) refers to stm32f4xx_gpio.o(i.GPIO_ResetBits) for GPIO_ResetBits
     drive_pwm.o(i.Ultrasonic_FireBurst) refers to stm32f4xx_tim.o(i.TIM_SetCounter) for TIM_SetCounter
     drive_pwm.o(i.Ultrasonic_FireBurst) refers to stm32f4xx_tim.o(i.TIM_ClearFlag) for TIM_ClearFlag
     drive_pwm.o(i.Ultrasonic_FireBurst) refers to stm32f4xx_tim.o(i.TIM_Cmd) for TIM_Cmd
@@ -576,8 +576,8 @@ Section Cross References
     drive_pwm.o(i.Ultrasonic_PWM_Init) refers to stm32f4xx_gpio.o(i.GPIO_PinAFConfig) for GPIO_PinAFConfig
     drive_pwm.o(i.Ultrasonic_PWM_Init) refers to stm32f4xx_gpio.o(i.GPIO_StructInit) for GPIO_StructInit
     drive_pwm.o(i.Ultrasonic_PWM_Init) refers to stm32f4xx_gpio.o(i.GPIO_Init) for GPIO_Init
-    drive_pwm.o(i.Ultrasonic_PWM_Init) refers to stm32f4xx_gpio.o(i.GPIO_ResetBits) for GPIO_ResetBits
     drive_pwm.o(i.Ultrasonic_PWM_Init) refers to stm32f4xx_gpio.o(i.GPIO_SetBits) for GPIO_SetBits
+    drive_pwm.o(i.Ultrasonic_PWM_Init) refers to stm32f4xx_gpio.o(i.GPIO_ResetBits) for GPIO_ResetBits
     drive_pwm.o(i.Ultrasonic_PWM_Init) refers to stm32f4xx_tim.o(i.TIM_TimeBaseStructInit) for TIM_TimeBaseStructInit
     drive_pwm.o(i.Ultrasonic_PWM_Init) refers to stm32f4xx_tim.o(i.TIM_TimeBaseInit) for TIM_TimeBaseInit
     drive_pwm.o(i.Ultrasonic_PWM_Init) refers to stm32f4xx_tim.o(i.TIM_OCStructInit) for TIM_OCStructInit
@@ -588,11 +588,11 @@ Section Cross References
     drive_pwm.o(i.Ultrasonic_PWM_Init) refers to stm32f4xx_tim.o(i.TIM_ARRPreloadConfig) for TIM_ARRPreloadConfig
     drive_pwm.o(i.Ultrasonic_PWM_Init) refers to stm32f4xx_tim.o(i.TIM_Cmd) for TIM_Cmd
     drive_pwm.o(i.Ultrasonic_PWM_OutputDisable) refers to stm32f4xx_tim.o(i.TIM_Cmd) for TIM_Cmd
-    drive_pwm.o(i.Ultrasonic_PWM_OutputDisable) refers to stm32f4xx_gpio.o(i.GPIO_ResetBits) for GPIO_ResetBits
-    drive_pwm.o(i.Ultrasonic_PWM_OutputDisable) refers to delay.o(i.delay_us) for delay_us
     drive_pwm.o(i.Ultrasonic_PWM_OutputDisable) refers to stm32f4xx_gpio.o(i.GPIO_SetBits) for GPIO_SetBits
-    drive_pwm.o(i.Ultrasonic_PWM_OutputEnable) refers to stm32f4xx_gpio.o(i.GPIO_ResetBits) for GPIO_ResetBits
+    drive_pwm.o(i.Ultrasonic_PWM_OutputDisable) refers to delay.o(i.delay_us) for delay_us
+    drive_pwm.o(i.Ultrasonic_PWM_OutputDisable) refers to stm32f4xx_gpio.o(i.GPIO_ResetBits) for GPIO_ResetBits
     drive_pwm.o(i.Ultrasonic_PWM_OutputEnable) refers to stm32f4xx_gpio.o(i.GPIO_SetBits) for GPIO_SetBits
+    drive_pwm.o(i.Ultrasonic_PWM_OutputEnable) refers to stm32f4xx_gpio.o(i.GPIO_ResetBits) for GPIO_ResetBits
     drive_pwm.o(i.Ultrasonic_PWM_OutputEnable) refers to stm32f4xx_tim.o(i.TIM_SetCounter) for TIM_SetCounter
     drive_pwm.o(i.Ultrasonic_PWM_OutputEnable) refers to stm32f4xx_tim.o(i.TIM_ClearFlag) for TIM_ClearFlag
     drive_pwm.o(i.Ultrasonic_PWM_OutputEnable) refers to stm32f4xx_tim.o(i.TIM_Cmd) for TIM_Cmd
