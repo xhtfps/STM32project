@@ -25,9 +25,6 @@
 
 // Flash存储地址：STM32F407的Sector11起始地址。Sector11大小为128KB。
 // 选择此区域主要是因为它位于Flash末尾，不易与用户的代码区(通常从0x08000000开始)发生冲突。
-// Menu 4 PWM test: repeat one 8-cycle Burst every 100ms for oscilloscope trigger.
-#define PWM_TEST_BURST_INTERVAL_MS   100U
-
 #define ULTRASONIC_FLASH_ADDR        0x080E0000U
 
 // Flash数据魔数："USON"的ASCII码 (0x55 0x53 0x4F 0x4E)。
@@ -890,6 +887,7 @@ static void MenuHandler_PGA_Test(void)
     };
     char value_text[24];
 
+    Ultrasonic_PWM_OutputEnable();
     Ultrasonic_ApplyGain(gain_codes[gain_index]);
 
     Draw_Work_Title("程控增益调节");
@@ -897,27 +895,24 @@ static void MenuHandler_PGA_Test(void)
     OS_String_Show(280, 150, 24, 1, "PWM输出状态");
     OS_String_Show(280, 180, 24, 1, "输出方式");
     OS_String_Show(280, 210, 24, 1, "输出频率(Hz)");
-    OS_String_Show(280, 240, 24, 1, "Burst间隔(ms)");
+    OS_String_Show(280, 240, 24, 1, "输出占空比(%)");
     OS_String_Show(280, 270, 24, 1, "当前增益(x)");
     OS_String_Show(280, 300, 24, 1, "增益档位");
     OS_String_Show(280, 330, 24, 1, "波形说明");
     OS_String_Show(280, 360, 24, 1, "当前提示");
 
-    Show_Text_Value_Only(0, "Burst触发");
-    Show_Text_Value_Only(1, "8周期Burst");
+    Show_Text_Value_Only(0, "开启");
+    Show_Text_Value_Only(1, "互补PWM");
     Show_Text_Value_Only(2, "040000");
-    sprintf(value_text, "%03u", PWM_TEST_BURST_INTERVAL_MS);
-    Show_Text_Value_Only(3, value_text);
+    Show_Text_Value_Only(3, "050");
     sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
     Show_Text_Value_Only(4, value_text);
     Show_Text_Value_Only(5, "1/2/4/8/16/32/64/128");
     Show_Text_Value_Only(6, "PD12/PD13输出");
-    Show_Text_Value_Only(7, "100ms定位");
+    Show_Text_Value_Only(7, "等待调节");
 
     while(Ps2KeyValue != KeyValue_Back)
     {
-        Ultrasonic_FireBurst();
-
         if(Ps2KeyValue == KeyValue_Add)
         {
             Ps2KeyValue = KeyValue_Null;
@@ -950,9 +945,10 @@ static void MenuHandler_PGA_Test(void)
                 Show_Text_Value_Only(7, "已到最小增益");
             }
         }
-        delay_ms(PWM_TEST_BURST_INTERVAL_MS);
+        delay_ms(20);
     }
 
+    Ultrasonic_PWM_OutputDisable();
     Ps2KeyValue = KeyValue_Null;
     Change_Menu(0);
 }

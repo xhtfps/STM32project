@@ -126,7 +126,7 @@ void PWM2_Init(void)
     
     // 4. 定时器基础配置：用于计时脉冲宽度
     // 假设系统时钟设为168MHz，TIM5时钟=84M*2=168MHz。预分频设为168-1，则定时器频率为1MHz，即1微秒(us)计一次数。
-    TIM_TimeBaseStructure.TIM_Prescaler = 168-1;  
+    TIM_TimeBaseStructure.TIM_Prescaler = 168-1; 
     TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up; 
     TIM_TimeBaseStructure.TIM_Period = 1000000-1;  // 周期设为最大，1000000us = 1秒溢出一次
     TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;

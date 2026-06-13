@@ -144,33 +144,3 @@ void Show_Font(u16 x,u16 y,u8 *font,u8 size,u8 mode)
 //}
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
