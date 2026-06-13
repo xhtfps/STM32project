@@ -16,8 +16,57 @@
 #define PWM1_PERIOD     (105000.0f/PWM1_FREQUENCY) 
 
 /* 私有（静态）函数声明 ------------------------------------------------------*/
+static void Ultrasonic_PWM_PinsToAf(void);
+static void Ultrasonic_PWM_PinsToLowGpio(void);
 
 /* 全局变量定义 --------------------------------------------------------------*/
+
+static void Ultrasonic_PWM_PinsToAf(void)
+{
+    GPIO_InitTypeDef gpio;
+
+    GPIO_PinAFConfig(ULTRASONIC_CH1_GPIO_PORT, ULTRASONIC_CH1_GPIO_SOURCE, ULTRASONIC_TIM_AF);
+    GPIO_PinAFConfig(ULTRASONIC_CH2_GPIO_PORT, ULTRASONIC_CH2_GPIO_SOURCE, ULTRASONIC_TIM_AF);
+
+    GPIO_StructInit(&gpio);
+    gpio.GPIO_Pin = ULTRASONIC_CH1_GPIO_PIN;
+    gpio.GPIO_Mode = GPIO_Mode_AF;
+    gpio.GPIO_Speed = GPIO_Speed_100MHz;
+    gpio.GPIO_OType = GPIO_OType_PP;
+    gpio.GPIO_PuPd = GPIO_PuPd_NOPULL;
+    GPIO_Init(ULTRASONIC_CH1_GPIO_PORT, &gpio);
+
+    gpio.GPIO_Pin = ULTRASONIC_CH2_GPIO_PIN;
+    GPIO_Init(ULTRASONIC_CH2_GPIO_PORT, &gpio);
+
+    TIM_CCxCmd(TIM4, TIM_Channel_1, TIM_CCx_Enable);
+    TIM_CCxCmd(TIM4, TIM_Channel_2, TIM_CCx_Enable);
+}
+
+static void Ultrasonic_PWM_PinsToLowGpio(void)
+{
+    GPIO_InitTypeDef gpio;
+
+    TIM_CCxCmd(TIM4, TIM_Channel_1, TIM_CCx_Disable);
+    TIM_CCxCmd(TIM4, TIM_Channel_2, TIM_CCx_Disable);
+
+    GPIO_ResetBits(ULTRASONIC_CH1_GPIO_PORT, ULTRASONIC_CH1_GPIO_PIN);
+    GPIO_ResetBits(ULTRASONIC_CH2_GPIO_PORT, ULTRASONIC_CH2_GPIO_PIN);
+
+    GPIO_StructInit(&gpio);
+    gpio.GPIO_Pin = ULTRASONIC_CH1_GPIO_PIN;
+    gpio.GPIO_Mode = GPIO_Mode_OUT;
+    gpio.GPIO_Speed = GPIO_Speed_100MHz;
+    gpio.GPIO_OType = GPIO_OType_PP;
+    gpio.GPIO_PuPd = GPIO_PuPd_DOWN;
+    GPIO_Init(ULTRASONIC_CH1_GPIO_PORT, &gpio);
+
+    gpio.GPIO_Pin = ULTRASONIC_CH2_GPIO_PIN;
+    GPIO_Init(ULTRASONIC_CH2_GPIO_PORT, &gpio);
+
+    GPIO_ResetBits(ULTRASONIC_CH1_GPIO_PORT, ULTRASONIC_CH1_GPIO_PIN);
+    GPIO_ResetBits(ULTRASONIC_CH2_GPIO_PORT, ULTRASONIC_CH2_GPIO_PIN);
+}
 
 /* 全局函数编写 --------------------------------------------------------------*/
 /** ----------------------------------------------------------------------------
@@ -168,21 +217,8 @@ void Ultrasonic_PWM_Init(void)
     RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOD | RCC_AHB1Periph_GPIOC, ENABLE);
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);
 
-    // 2. 将驱动引脚复用至定时器AF功能（这里使用了宏定义，提升了代码移植性）
-    GPIO_PinAFConfig(ULTRASONIC_CH1_GPIO_PORT, ULTRASONIC_CH1_GPIO_SOURCE, ULTRASONIC_TIM_AF);
-    GPIO_PinAFConfig(ULTRASONIC_CH2_GPIO_PORT, ULTRASONIC_CH2_GPIO_SOURCE, ULTRASONIC_TIM_AF);
-
-    // 3. 配置推挽输出GPIO引脚
-    GPIO_StructInit(&gpio);
-    gpio.GPIO_Pin = ULTRASONIC_CH1_GPIO_PIN;
-    gpio.GPIO_Mode = GPIO_Mode_AF;
-    gpio.GPIO_Speed = GPIO_Speed_100MHz; // 提高翻转速率保证方波质量
-    gpio.GPIO_OType = GPIO_OType_PP; // 推挽输出
-    gpio.GPIO_PuPd = GPIO_PuPd_NOPULL;
-    GPIO_Init(ULTRASONIC_CH1_GPIO_PORT, &gpio);
-
-    gpio.GPIO_Pin = ULTRASONIC_CH2_GPIO_PIN;
-    GPIO_Init(ULTRASONIC_CH2_GPIO_PORT, &gpio);
+    // 2. 配置推挽输出GPIO引脚，并复用至TIM4
+    Ultrasonic_PWM_PinsToAf();
 
     // 4. 配置GPIOC用于外围模拟电路的收发比较器电源使能引脚
     gpio.GPIO_Pin = ULTRASONIC_RX_CMP_CTRL_PIN | ULTRASONIC_TX_CMP_CTRL_PIN;
@@ -227,6 +263,7 @@ void Ultrasonic_PWM_Init(void)
     
     // 10. 暂不使能定时器，等待手动触发发射
     TIM_Cmd(TIM4, DISABLE);
+    Ultrasonic_PWM_PinsToLowGpio();
 }
 
 /** ----------------------------------------------------------------------------
@@ -239,6 +276,7 @@ void Ultrasonic_PWM_OutputEnable(void)
     ULTRASONIC_RX_CMP_OFF(); // 关键动作：关闭接收电路，防止发射的强信号直接耦合进接收端导致"自激"或误判
     ULTRASONIC_TX_CMP_ON();  // 打开升压/发射电路电源
     
+    Ultrasonic_PWM_PinsToAf();
     TIM_SetCounter(TIM4, 0); // 清零计数器，保证从完整周期开始发送
     TIM_ClearFlag(TIM4, TIM_FLAG_Update); // 清除可能残留的更新标志位
     TIM_Cmd(TIM4, ENABLE);   // 启动PWM输出
@@ -252,6 +290,7 @@ void Ultrasonic_PWM_OutputEnable(void)
 void Ultrasonic_PWM_OutputDisable(void)
 {
     TIM_Cmd(TIM4, DISABLE);  // 立即关闭PWM输出
+    Ultrasonic_PWM_PinsToLowGpio();
     ULTRASONIC_TX_CMP_OFF(); // 关断发射端电路电源
     
     // 硬件级盲区控制：压电陶瓷探头在停止激励后会有机械余震（Ring-down），
@@ -274,6 +313,7 @@ void Ultrasonic_FireBurst(void)
     ULTRASONIC_TX_CMP_ON();
 
     // 2. 状态重置与启动
+    Ultrasonic_PWM_PinsToAf();
     TIM_SetCounter(TIM4, 0);
     TIM_ClearFlag(TIM4, TIM_FLAG_Update);
     TIM_Cmd(TIM4, ENABLE); // 开始输出PWM脉冲
@@ -285,6 +325,7 @@ void Ultrasonic_FireBurst(void)
     
     // 4. 延时结束，停止PWM波输出
     TIM_Cmd(TIM4, DISABLE);
+    Ultrasonic_PWM_PinsToLowGpio();
 
     // 5. 关断发射电路，防止静态漏电或噪声干扰
     ULTRASONIC_TX_CMP_OFF();

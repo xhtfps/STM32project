@@ -103,6 +103,7 @@ static void Show_Text_Line(uint16_t line, char *text);
 static void Show_Value_Line(uint16_t line, char *label, double value, char *format);
 static void Show_Value_Only(uint16_t line, double value, char *format);
 static void Show_Text_Value_Only(uint16_t line, char *text);
+static void Wait_Ps2KeyRelease(uint8_t key_value);
 
 // 超声波硬件驱动函数
 static void Ultrasonic_Timer_Init(void);
@@ -260,6 +261,15 @@ static void Show_Text_Line(uint16_t line, char *text) { uint16_t y = (uint16_t)(
 static void Show_Value_Line(uint16_t line, char *label, double value, char *format) { char temp[24]; uint16_t y = (uint16_t)(150 + line * 30); sprintf(temp, format, value); OS_String_Show(280, y, 24, 1, label); OS_String_Show(500, y, 24, 1, temp); }
 static void Show_Value_Only(uint16_t line, double value, char *format) { char temp[24]; uint16_t y = (uint16_t)(150 + line * 30); sprintf(temp, format, value); OS_String_Show(500, y, 24, 1, temp); }
 static void Show_Text_Value_Only(uint16_t line, char *text) { uint16_t y = (uint16_t)(150 + line * 30); OS_String_Show(500, y, 24, 1, text); }
+
+static void Wait_Ps2KeyRelease(uint8_t key_value)
+{
+    do
+    {
+        Ps2KeyValue = KeyValue_Null;
+        delay_ms(30);
+    } while(Ps2KeyValue == key_value);
+}
 
 
 /************************* 超声波硬件驱动核心层 *************************/
@@ -790,6 +800,7 @@ static void MenuHandler_Calibrate(void)
             Show_Text_Value_Only(1, "正在校准");
             if(Ultrasonic_MeasureFiltered(&echo_us) != 0U)
             {
+                
                 new_calib.point_us[step] = echo_us;
                 sprintf(line, "%05lu", (unsigned long)echo_us);
                 Show_Text_Value_Only(6, line);
@@ -819,6 +830,8 @@ static void MenuHandler_Calibrate(void)
                 Show_Text_Value_Only(1, "校准超时");
                 Show_Text_Value_Only(7, "校准失败");
             }
+            Show_Text_Value_Only(7, "松开确认键");
+            Wait_Ps2KeyRelease(KeyValue_Enter);
         }
         delay_ms(20);
     }
