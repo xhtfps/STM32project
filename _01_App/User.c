@@ -1,1172 +1,1330 @@
-#include "User.h"
-#include "Drive_PWM.h"
-
-/************************* ³¬Éù²¨Ä£¿é²ÎÊıÅäÖÃ *************************/
-/* * ÎïÀí±³¾°ÖªÊ¶£º³£ÎÂÏÂÉùËÙÔ¼Îª 343m/s¡£
- * 1Î¢Ãë(us)Éù²¨´«²¥µÄ¾àÀë = 343 * 10^2 / 10^6 = 0.0343 ÀåÃ× = 0.343 ºÁÃ×¡£
- * ÒòÎª³¬Éù²¨ÊÇÍù·µ´«²¥£¬ËùÒÔÊµ¼Ê²â¾àÖĞ 1us ¶ÔÓ¦µÄ¾àÀëÎª 0.343 / 2 = 0.1715 ºÁÃ×¡£
- */
-
-// ²âÁ¿³¬Ê±Ê±¼ä(Î¢Ãë)£º¶ÔÓ¦×î´ó²âÁ¿¾àÀëÔ¼2Ã×(Íù·µÊ±¼ä=2m * 2 / 343m/s ¡Ö 11662us)
-#define ULTRASONIC_TIMEOUT_US        12000U
-
-// ×îĞ¡ÓĞĞ§»Ø²¨Ê±¼ä(Î¢Ãë)£º¹ıÂËÓÉÓÚÓ²¼şµçÂ·´®ÈÅ²úÉúµÄ¼«¶Ì¸ÉÈÅÃ«´Ì
-#define ULTRASONIC_MIN_VALID_US      20U
-#define ULTRASONIC_MIN_PULSE_WIDTH_US  30U
-
-// ½ÓÊÕÃ¤Çø/ÏûÒşÊ±¼ä(Î¢Ãë)£º·¢ÉäÌ½Í·ÔÚ·¢³öÉù²¨ºó»áÓĞÓàÕğ£¬½ÓÊÕµçÂ·ÔÚ¸Õ·¢ÉäÍêµÄÕâ¶ÎÊ±¼äÄÚ»áÊÕµ½Ç¿ÁÒµÄ×ÔÉí¸ÉÈÅ¡£
-// Éè¶¨450usÃ¤Çø£¬ÒâÎ¶×Å·ÅÆú²âÁ¿¼«ÆäÌù½üÌ½Í·µÄ¾àÀë£¨Ô¼ºÏ½ü¾àÃ¤Çø7.7cm£©£¬·ÀÖ¹×Ô¼¤ÎóÅĞ¡£
-#define ULTRASONIC_BLANKING_US       450U   
-
-// ÂË²¨²ÉÑù´ÎÊı£º¾ö¶¨ÁËµ¥´ÎÓĞĞ§²â¾àĞèÒª²É¼¯¶àÉÙ¸öÑù±¾¡£±ØĞëÅäºÏÈ¥¼«ÖµËã·¨Ê¹ÓÃ¡£
-#define ULTRASONIC_FILTER_SAMPLES    60U
-#define ULTRASONIC_CLUSTER_SPAN_US   180U
-
-// ÔöÒæ²¹³¥×î´óÖØÊÔ´ÎÊı£ºµ±»Ø²¨ĞÅºÅÎ¢ÈõÎ´´¥·¢ÖĞ¶ÏÊ±£¬³¢ÊÔÌáÉı¿É±à³ÌÔöÒæ·Å´óÆ÷(PGA)±¶ÊıµÄ´ÎÊı
-#define ULTRASONIC_GAIN_RETRY_MAX    3U
-#define ULTRASONIC_TRACK_MARGIN_US   3000U
-#define ULTRASONIC_REACQUIRE_MISSES  2U
-#define ULTRASONIC_REACQUIRE_MIN_US  650U
-
-// Flash´æ´¢µØÖ·£ºSTM32F407µÄSector11ÆğÊ¼µØÖ·¡£Sector11´óĞ¡Îª128KB¡£
-// Ñ¡Ôñ´ËÇøÓòÖ÷ÒªÊÇÒòÎªËüÎ»ÓÚFlashÄ©Î²£¬²»Ò×ÓëÓÃ»§µÄ´úÂëÇø(Í¨³£´Ó0x08000000¿ªÊ¼)·¢Éú³åÍ»¡£
-#define ULTRASONIC_FLASH_ADDR        0x080E0000U
-
-// FlashÊı¾İÄ§Êı£º"USON"µÄASCIIÂë (0x55 0x53 0x4F 0x4E)¡£
-// ×÷ÓÃ£ºµ¥Æ¬»úÉÏµçÊ±£¬Í¨¹ı±È¶ÔÕâ¸ö±êÖ¾£¬ÅĞ¶ÏFlash¸ÃÇøÓò´æ´¢µÄÊÇ·ñÊÇÓĞĞ§ÇÒ¸ñÊ½ÕıÈ·µÄĞ£×¼Êı¾İ£¬¶ø·ÇÎ´³õÊ¼»¯µÄÂÒÂë(0xFFFFFFFF)¡£
-#define ULTRASONIC_FLASH_MAGIC       0x55534F4EU  
-// FlashÊı¾İ°æ±¾ºÅ£ºÈôºóĞø¸ü¸ÄÁË½á¹¹Ìå´óĞ¡»ò³ÉÔ±£¬¿ÉÍ¨¹ı±ä¸ü°æ±¾ºÅÊ¹¾ÉĞ£×¼Êı¾İ×Ô¶¯Ê§Ğ§£¬·ÀÖ¹ÄÚ´æÔ½½ç»ò½âÎö´íÎó¡£
-#define ULTRASONIC_FLASH_VERSION     0x00010001U  
-
-/************************* ÆÁÄ»ÏÔÊ¾³£Á¿¶¨Òå *************************/
-#define TITLE_STR        "³¬Éù²¨²â¾àÒÇ"         // Ö÷½çÃæ±êÌâ
-#define MODEL_VER_STR    "ĞÍºÅ£ºHC-SR04"       // Ó²¼şĞÍºÅ
-#define USER_VER_STR     "°æ±¾£ºV1.0"          // Èí¼ş°æ±¾
-#define MENU1_CHOICE1    "1. ÊµÊ±²âÁ¿"         // ²Ëµ¥Ñ¡Ïî1
-#define MENU1_CHOICE2    "2. ¾àÀëĞ£×¼"         // ²Ëµ¥Ñ¡Ïî2
-#define MENU1_CHOICE3    "3. ÏµÍ³×´Ì¬"         // ²Ëµ¥Ñ¡Ïî3
-#define MENU1_CHOICE4    "4. ³Ì¿Øµ÷½Ú"         // ²Ëµ¥Ñ¡Ïî4
-#define MENU_CHOICE_NUM  4                    // ²Ëµ¥Ñ¡Ïî×ÜÊı
-
-// ¿ìËÙÇåÆÁÓÃµÄ¿Õ°××Ö·û´®Êı×é¡£Ö±½ÓÀûÓÃ¸²¸ÇĞ´×Ö·ûµÄ·½Ê½À´²Á³ıÉÏÒ»Ö¡ÏÔÊ¾µÄ¾ÉÎÄ±¾£¬±Èµ÷ÓÃLCDÇåÆÁº¯Êı¿ªÏúĞ¡¡£
-#define UI_BLANK_TEXT_16 "                                                                "  // 16ºÅ×Ö£¬64¸ö¿Õ¸ñ
-#define UI_BLANK_TEXT_24 "                                                "                // 24ºÅ×Ö£¬48¸ö¿Õ¸ñ
-#define UI_BLANK_TEXT_32 "                                "                                // 32ºÅ×Ö£¬32¸ö¿Õ¸ñ
-#define UI_VALUE_BLANK_24 "                        "                                       // ÊıÖµÇøÓò¿Õ°×
-
-/************************* Êı¾İ½á¹¹¶¨Òå *************************/
-/**
- * @brief ³¬Éù²¨Ğ£×¼Êı¾İ½á¹¹Ìå
- * @note ÓÃÓÚ·Ö¶ÎÏßĞÔ²åÖµĞ£×¼¡£Ëü½«Êµ¼ÊµÄ·ÇÏßĞÔÎó²î×ª»¯Îª¶à¶ÎÖ±ÏßÀ´½üËÆ¡£
- * ½á¹¹ÌåĞèÒªÈ·±£4×Ö½Ú¶ÔÆë£¬ÒòÎªFlashĞ´ÈëÍ¨³£ÒÔWord(32Î»)Îª×îĞ¡µ¥Ôª¡£
- */
-typedef struct
-{
-    uint32_t magic;               // Êı¾İºÏ·¨ĞÔ±êÖ¾
-    uint32_t version;             // ½á¹¹Ìå°æ±¾ºÅ
-    uint32_t point_us[4];         // ´æ´¢4¸ö±ê×¼¾àÀëÏÂÊµ¼Ê²âµÃµÄ»Ø²¨Ê±¼ä(Î¢Ãë)
-    uint32_t reserved[2];         // Ô¤Áô¿Õ¼ä£¬±£Ö¤½á¹¹Ìå×Ü´óĞ¡Îª32×Ö½Ú£¬·½±ãFlash²Ù×÷À©Õ¹
-} UltrasonicCalibData;
-
-// Ñ¡¶¨4¸ö»ù×¼Ğ£×¼¾àÀë(µ¥Î»£ººÁÃ×)¡£ÕâĞ©¾àÀë¸²¸ÇÁËÈÕ³£Ê¹ÓÃµÄ½ü¡¢ÖĞ¡¢Ô¶Çø¼ä¡£
-static const uint16_t k_calib_distance_mm[4] = {100, 600, 900, 2000};
-
-/************************* È«¾Ö±äÁ¿¶¨Òå *************************/
-/* * ´øÓĞ volatile ¹Ø¼ü×ÖµÄ±äÁ¿£¬´ú±íËüÃÇ»áÔÚÍâ²¿ÖĞ¶Ï (EXTI) ÖĞ±»ËæÊ±ĞŞ¸Ä¡£
- * Ç¿ÖÆ±àÒëÆ÷Ã¿´ÎÓÃµ½ËüÃÇÊ±¶¼È¥ÄÚ´æ¶ÁÈ¡£¬·ÀÖ¹ÒòÎª±àÒëÆ÷¿ªÆôÓÅ»¯¶øµ¼ÖÂ×´Ì¬»ú¿¨ËÀ¡£
- */
-static volatile uint8_t g_echo_captured = 0;    // ²âÁ¿Íê³É±êÖ¾(1:³É¹¦²¶×½ÍêÕû»Ø²¨)
-static volatile uint8_t g_measure_active = 0;   // ²âÁ¿´°¿Ú¿ªÆô±êÖ¾(1:ÔÊĞíÖĞ¶Ï¼ÇÂ¼±ßÑØ)
-static volatile uint32_t g_echo_time_us = 0;    // ×îÖÕ¼ÆËã³öµÄÓĞĞ§»Ø²¨·åÖµµ½´ïÊ±¼ä
-static volatile uint32_t g_echo_rise_us = 0;    // ¼ÇÂ¼Âö³åÉÏÉıÑØµ½´ïµÄÊ±¿Ì
-static volatile uint32_t g_echo_fall_us = 0;    // ¼ÇÂ¼Âö³åÏÂ½µÑØµ½´ïµÄÊ±¿Ì
-static volatile uint8_t g_echo_rise_seen = 0;   // ×´Ì¬»ú±êÖ¾£ºÊÇ·ñÒÑ¾­¼ì²âµ½ÉÏÉıÑØ
-static volatile uint32_t g_echo_accept_min_us = 0;
-static volatile uint32_t g_echo_accept_max_us = ULTRASONIC_TIMEOUT_US;
-
-static uint8_t g_gain_settle_discard = 0;       // ÔË·ÅÔöÒæÇĞ»»ºó£¬Ó²¼şµçÂ·ĞèÒª½¨Á¢Ê±¼ä¡£´Ë±êÖ¾ÌáÊ¾¶ªÆúÇĞ»»ºóµÄÊ×´Î²âÁ¿¡£
-static uint32_t g_last_echo_us = 1500U;         // ±£´æÉÏÒ»´ÎÓĞĞ§²âÁ¿µÄ»Ø²¨Ê±¼ä¡£ÀûÓÃ¿Õ¼äÏà¹ØĞÔ£¬Ô¤²âÏÂÒ»´ÎËùĞèµÄÔöÒæ±¶Êı¡£
-static uint8_t g_tracking_valid = 0;           // ÊµÊ±²âÁ¿¸ú×Ù´°¿ÚÊÇ·ñÒÑ¾­Ëø¶¨ÓĞĞ§»Ø²¨
-static uint8_t g_reacquire_ignore_near = 0;     // Reacquire mode ignores near-end crosstalk
-static uint8_t g_ultrasonic_gain_code = PGA112_DEFAULT_GAIN_CODE; // ¼ÇÂ¼µ±Ç°ÔË·ÅµÄÔöÒæµ²Î»
-
-// Ğ£×¼Ïà¹Ø×´Ì¬±äÁ¿
-static UltrasonicCalibData g_calib = {0};       // ÔËĞĞÊ±¼ÓÔØµ½RAMµÄĞ£×¼Êı¾İ»º´æ
-static uint8_t g_calib_valid = 0;               // ÈôFlashÖĞÊı¾İ²»ºÏ·¨£¬´Ë±êÖ¾Îª0£¬ÏµÍ³½µ¼¶Ê¹ÓÃÀíÏë¹«Ê½¼ÆËã
-
-// UI×´Ì¬»ú
-static uint8_t g_menu_sign = 0;                 // 0=Ö÷²Ëµ¥£¬1=²âÁ¿£¬2=Ğ£×¼£¬3=×´Ì¬£¬4=³Ì¿ØPWM²âÊÔ
-
-/************************* º¯ÊıÉùÃ÷ *************************/
-// ÏµÍ³³õÊ¼»¯ÓëÖ÷½çÃæº¯Êı
-static void Init_All(void);
-static void Disp_Main(void);
-static void Change_Menu(uint8_t menu_sign);
-
-// UI¹¤¾ßº¯Êı
-static void Clear_Work_Area(void);
-static void Clear_Work_Text(void);
-static void Draw_Work_Title(char *title);
-static void Draw_Key_Tips(char *tip1, char *tip2);
-static void Show_Text_Line(uint16_t line, char *text);
-static void Show_Value_Line(uint16_t line, char *label, double value, char *format);
-static void Show_Value_Only(uint16_t line, double value, char *format);
-static void Show_Text_Value_Only(uint16_t line, char *text);
-static void Wait_Ps2KeyRelease(uint8_t key_value);
-
-// ³¬Éù²¨Ó²¼şÇı¶¯º¯Êı
-static void Ultrasonic_Timer_Init(void);
-static void Ultrasonic_Echo_Init(void);
-static void Ultrasonic_ApplyGain(uint8_t gain_code);
-static uint8_t Ultrasonic_SelectGainCode(uint32_t echo_us);
-static uint32_t Ultrasonic_EstimatePeakTime(uint32_t rise_us, uint32_t fall_us);
-static void Ultrasonic_PrepareGain(uint8_t retry_count);
-static void Ultrasonic_SetAcceptWindow(uint32_t min_us, uint32_t max_us);
-static void Ultrasonic_SetTrackingWindow(void);
-static uint8_t Ultrasonic_MeasureOnce(uint32_t *echo_us);
-static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us);
-static void Sort_Samples(uint32_t *data, uint8_t length);
-
-// Ğ£×¼Óë¾àÀë×ª»»º¯Êı
-static void Calibration_Load(void);
-static uint8_t Calibration_IsValid(const UltrasonicCalibData *calib);
-static uint8_t Calibration_Save(const UltrasonicCalibData *calib);
-static void Calibration_SetMeasureWindow(uint16_t distance_mm);
-static float Convert_Time_To_Distance(uint32_t echo_us);
-static float Convert_Time_To_Distance_Default(uint32_t echo_us);
-
-// ²Ëµ¥´¦Àíº¯Êı
-static void MenuHandler_Measure(void);
-static void MenuHandler_Calibrate(void);
-static void MenuHandler_Status(void);
-static void MenuHandler_PGA_Test(void);
-
-/************************* Ö÷º¯Êı *************************/
-/**
- * @brief ÓÃ»§Ö÷º¯Êı£¬³ÌĞòÈë¿Ú
- */
-void User_main(void)
-{
-    Init_All();          // µ×²ãÓ²¼ş³õÊ¼»¯(GPIO¡¢¶¨Ê±Æ÷¡¢ÖĞ¶Ï¡¢¶ÁÈ¡FlashĞ£×¼Êı¾İ)
-    Disp_Main();         // »æÖÆ¾²Ì¬Ö÷¿ò¼Ü
-
-    // ²ÉÓÃËÀÑ­»·+×´Ì¬»úµÄÂã»úÔËĞĞ¿ò¼Ü
-    while(1)
-    {
-        switch(g_menu_sign)
-        {
-            case 0:  // Í£ÁôÔÚÖ÷²Ëµ¥£ºÂÖÑ¯°´¼ü¼ì²â
-                if(Ps2KeyValue >= KeyValue_1 && Ps2KeyValue <= KeyValue_4)
-                {
-                    // ¶¯Ì¬¸üĞÂÑ¡ÏîÖ¸Ê¾·û '>' ²¢ÇĞ»»×´Ì¬
-                    Change_Menu((uint8_t)(Ps2KeyValue - KeyValue_0));
-                }
-                break;
-            case 1:  // ½øÈëÊµÊ±²âÁ¿×èÈûÌ¬
-                MenuHandler_Measure();
-                break;
-            case 2:  // ½øÈë¶àµãĞ£×¼×èÈûÌ¬
-                MenuHandler_Calibrate();
-                break;
-            case 3:  // ½øÈë²é¿´×´Ì¬×èÈûÌ¬
-                MenuHandler_Status();
-                break;
-            case 4:  // ½øÈëÊÖ¶¯ÔöÒæ/PWM²âÊÔ×èÈûÌ¬
-                MenuHandler_PGA_Test();
-                break;
-            default: // ·ÀÓùĞÔ±à³Ì£º×´Ì¬ÅÜ·ÉÊ±Ç¿ÖÆ¸´Î»µ½Ö÷Ò³
-                g_menu_sign = 0;
-                break;
-        }
-        delay_ms(10);  // ÊÊµ±µÄĞİÃß£¬±ÜÃâ°´¼üÂÖÑ¯¿ÕºÄ¹ı¶àÄÜºÄ
-    }
-}
-
-/************************* ÏµÍ³³õÊ¼»¯º¯Êı *************************/
-static void Init_All(void)
-{
-    LCD_Clear(Black);                  // Ë¢ºÚÆÁ
-    Ultrasonic_PWM_Init();             // ÅäÖÃ·¢ÉäÌ½Í·ĞèÒªµÄ40kHz·½²¨´¥·¢»·¾³
-    Ultrasonic_Timer_Init();           // ÅäÖÃTIM5ÓÃ×÷¸ß¾«¶ÈµÄÄÉÃë/Î¢Ãë¼¶Ãë±í
-    Ultrasonic_Echo_Init();            // ÅäÖÃÍâ²¿Òı½ÅÓÃÀ´½ÓÊÕ»Ø²¨²¢´¥·¢ÖĞ¶Ï
-    Calibration_Load();                // ´ÓFlash»½ĞÑÊ±»Ö¸´ÏÈÇ°µÄĞ£×¼Êı¾İ
-    
-    // ³õÊ¼»¯³Ì¿Ø·Å´óÆ÷ÖÁÄ¬ÈÏ±¶Êı
-    Ultrasonic_ApplyGain(PGA112_DEFAULT_GAIN_CODE);
-    g_gain_settle_discard = 0;
-}
-
-/************************* Ö÷½çÃæÏÔÊ¾º¯Êı *************************/
-static void Disp_Main(void)
-{
-    uint8_t count;
-    
-    // äÖÈ¾¶¥²¿±êÌâÇø
-    OS_String_Show(272, 16, 32, 1, TITLE_STR);
-    
-    // »æÖÆºáÊú·Ö¸îÏß£¬¹æ»®³ö×ó²àµ¼º½ºÍÓÒ²àÊı¾İÕ¹Ê¾Çø
-    LCD_Appoint_Clear(0, 64, 800, 72, White);    // ¶¥²¿ºáÏß
-    LCD_Appoint_Clear(0, 440, 800, 448, White);  // µ×²¿ºáÏß
-    LCD_Appoint_Clear(250, 72, 252, 440, White); // ´¹Ö±·Ö¸ôÏß
-    
-    // äÖÈ¾µ×²¿×´Ì¬À¸
-    OS_String_Show(32, 456, 16, 1, MODEL_VER_STR); 
-    OS_String_Show(680, 456, 16, 1, USER_VER_STR); 
-    
-    // ³õÊ¼»¯×ó²à²Ëµ¥µÄÎ´Ñ¡ÖĞ±ê¼Ç "-"
-    for(count = 1; count <= MENU_CHOICE_NUM; count++)
-    {
-        OS_String_Show(32, (uint16_t)(32 + 64 * count), 32, 1, "-");
-    }
-    
-    // äÖÈ¾²Ëµ¥ÎÄ×Ö
-    OS_String_Show(60, 96, 32, 1, MENU1_CHOICE1);
-    OS_String_Show(60, 160, 32, 1, MENU1_CHOICE2);
-    OS_String_Show(60, 224, 32, 1, MENU1_CHOICE3);
-    OS_String_Show(60, 288, 32, 1, MENU1_CHOICE4);
-}
-
-/**
- * @brief ¶¯Ì¬ÇĞ»»²Ëµ¥µÄUIÂß¼­
- */
-static void Change_Menu(uint8_t menu_sign)
-{
-    uint8_t count;
-
-    // ÏÈ²Á³ı¾ÉµÄËùÓĞÖ¸Ê¾¼ıÍ·
-    for(count = 1; count <= MENU_CHOICE_NUM; count++)
-    {
-        OS_String_Show(32, (uint16_t)(32 + 64 * count), 32, 1, "-");
-    }
-
-    // ¸üĞÂĞÂÑ¡ÖĞµÄÑ¡Ïî¼ıÍ·
-    if(menu_sign >= 1 && menu_sign <= MENU_CHOICE_NUM)
-    {
-        OS_String_Show(32, (uint16_t)(32 + 64 * menu_sign), 32, 1, ">");
-        g_menu_sign = menu_sign;
-    }
-    else
-    {
-        g_menu_sign = 0;  // °´¼üÂß¼­´íÎó±£»¤
-        Clear_Work_Area();
-    }
-
-    Ps2KeyValue = KeyValue_Null;  // Ïû·Ñµô¸Ã´Î°´¼üÊÂ¼ş£¬·ÀÖ¹Á¬Ğø´¥·¢
-}
-
-/************************* UI¹¤¾ßº¯Êı(ÊµÏÖÂÔ¹ıÏê×¢) *************************/
-static void Clear_Work_Area(void) { Clear_Work_Text(); }
-
-static void Clear_Work_Text(void)
-{
-    uint8_t line;
-    // Ê¹ÓÃºê¶¨ÒåµÄ¿Õ°××Ö·û´®¸²¸ÇÌØ¶¨×ø±êµÄÄÚÈİ£¬´ïµ½¾Ö²¿ÇåÆÁĞ§¹û
-    OS_String_Show(280, 88, 32, 1, UI_BLANK_TEXT_32);
-    for(line = 0; line < 9U; line++) { OS_String_Show(280, (uint16_t)(150 + line * 30), 24, 1, UI_BLANK_TEXT_24); }
-    OS_String_Show(280, 400, 16, 1, UI_BLANK_TEXT_16);
-    OS_String_Show(280, 420, 16, 1, UI_BLANK_TEXT_16);
-}
-
-static void Draw_Work_Title(char *title) { OS_String_Show(280, 88, 32, 1, title); }
-static void Draw_Key_Tips(char *tip1, char *tip2) { OS_String_Show(280, 400, 16, 1, tip1); OS_String_Show(280, 420, 16, 1, tip2); }
-static void Show_Text_Line(uint16_t line, char *text) { uint16_t y = (uint16_t)(150 + line * 30); OS_String_Show(280, y, 24, 1, text); }
-static void Show_Value_Line(uint16_t line, char *label, double value, char *format) { char temp[24]; uint16_t y = (uint16_t)(150 + line * 30); sprintf(temp, format, value); OS_String_Show(280, y, 24, 1, label); OS_String_Show(500, y, 24, 1, temp); }
-static void Show_Value_Only(uint16_t line, double value, char *format) { char temp[24]; uint16_t y = (uint16_t)(150 + line * 30); sprintf(temp, format, value); OS_String_Show(500, y, 24, 1, temp); }
-static void Show_Text_Value_Only(uint16_t line, char *text) { uint16_t y = (uint16_t)(150 + line * 30); OS_String_Show(500, y, 24, 1, text); }
-
-static void Wait_Ps2KeyRelease(uint8_t key_value)
-{
-    do
-    {
-        Ps2KeyValue = KeyValue_Null;
-        delay_ms(30);
-    } while(Ps2KeyValue == key_value);
-}
-
-
-/************************* ³¬Éù²¨Ó²¼şÇı¶¯ºËĞÄ²ã *************************/
-/**
- * @brief ³õÊ¼»¯¶¨Ê±Æ÷5£¬ÓÃÓÚ¾«È·¼ÆÊ±»Ø²¨Ê±¼ä
- * @note ÎªÊ²Ã´Ñ¡TIM5£ºËüÊÇSTM32ÖĞÉÙÓĞµÄ32Î»¶¨Ê±Æ÷£¬Òç³öÖÜÆÚ¼«³¤£¬²»»áÏñ16Î»¶¨Ê±Æ÷ÄÇÑù²âÔ¶¾àÀëÊ±·¢ÉúÒç³ö·­×ª¡£
- */
-static void Ultrasonic_Timer_Init(void)
-{
-    TIM_TimeBaseInitTypeDef tim_base;
-
-    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM5, ENABLE);
-
-    TIM_TimeBaseStructInit(&tim_base);
-    // APB1×ÜÏßÆµÂÊÒ»°ãÎª 84MHz¡£Ô¤·ÖÆµÉèÎª(84-1)£¬µÃµ½½øÈë¼ÆÊıÆ÷µÄÊ±ÖÓÎª 1MHz¡£
-    // ¼´¶¨Ê±Æ÷Ã¿¼ÆÒ»¸öÊı£¬ÑÏ¸ñ´ú±íÁ÷ÊÅÁË 1Î¢Ãë(us)¡£
-    tim_base.TIM_Prescaler = 84 - 1;                     
-    tim_base.TIM_CounterMode = TIM_CounterMode_Up;       // µİÔö¼ÆÊıÄ£Ê½
-    tim_base.TIM_Period = 0xFFFFFFFFU;                   // MAX=0xFFFFFFFF£¬Ô¼µÈÓÚ4294Ãë²Å»áÒç³ö
-    tim_base.TIM_ClockDivision = TIM_CKD_DIV1;           
-    TIM_TimeBaseInit(TIM5, &tim_base);
-    
-    TIM_Cmd(TIM5, ENABLE);  // ¶¨Ê±Æ÷¹ÒÔØºó±£³Ö³£¿ª£¬ÎÒÃÇÔÚÖĞ¶ÏÖĞ¶ÁÈ¡¼ÆÊıÖµ
-}
-
-/**
- * @brief ³õÊ¼»¯³¬Éù²¨»Ø²¨Òı½ÅºÍÍâ²¿ÖĞ¶Ï
- * @note ÎªÊ²Ã´ÅäÖÃË«±ßÑØ´¥·¢£º½ÓÊÕµ½µÄ³¬Éù²¨»Ø²¨¾­¹ı¼ì²¨±È½ÏµçÂ·ºó£¬»áÊä³öÒ»¸öÂö³åĞÅºÅ¡£
- * ÎÒÃÇĞèÒªÖªµÀÕâ¸öÂö³åµÄ¸ßµçÆ½ÖĞĞÄÎ»ÖÃ(´ú±íÕæÊµ·åÖµ)£¬ËùÒÔÒªÍ¬Ê±×¥È¡ÉÏÉıÑØºÍÏÂ½µÑØ¡£
- */
-static void Ultrasonic_Echo_Init(void)
-{
-    GPIO_InitTypeDef gpio_init;
-    EXTI_InitTypeDef exti_init;
-    NVIC_InitTypeDef nvic_init;
-
-    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOC, ENABLE);
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_SYSCFG, ENABLE);
-
-    // PC0ÅäÖÃÎª¸¡¿ÕÊäÈë£¬ÒÀ¿¿Íâ½ÓµçÂ·»ò´«¸ĞÆ÷Ä£¿é×Ô´øµÄÍÆÍì/¿ªÂ©Êä³öÇı¶¯
-    GPIO_StructInit(&gpio_init);
-    gpio_init.GPIO_Pin = GPIO_Pin_0;
-    gpio_init.GPIO_Mode = GPIO_Mode_IN;
-    gpio_init.GPIO_PuPd = GPIO_PuPd_NOPULL;
-    GPIO_Init(GPIOC, &gpio_init);
-
-    // ½«PC0Ó³Éäµ½Íâ²¿ÖĞ¶ÏÏßEXTI0
-    SYSCFG_EXTILineConfig(EXTI_PortSourceGPIOC, EXTI_PinSource0);
-
-    EXTI_StructInit(&exti_init);
-    exti_init.EXTI_Line = EXTI_Line0;
-    exti_init.EXTI_Mode = EXTI_Mode_Interrupt;
-    exti_init.EXTI_Trigger = EXTI_Trigger_Rising_Falling;  // ¹Ø¼ü£ºÍ¬Ê±ÅäÖÃÉÏÉıÑØºÍÏÂ½µÑØ´¥·¢
-    exti_init.EXTI_LineCmd = ENABLE;
-    EXTI_Init(&exti_init);
-    EXTI_ClearITPendingBit(EXTI_Line0);
-
-    nvic_init.NVIC_IRQChannel = EXTI0_IRQn;
-    nvic_init.NVIC_IRQChannelPreemptionPriority = 2;  // ÇÀÕ¼ÓÅÏÈ¼¶²»ÄÜÌ«µÍ£¬ÒÔÃâÓÉÓÚÆäËûÖĞ¶ÏÑÓÎóµ¼ÖÂ²â¾à³öÏÖÎ¢Ãë¼¶Îó²î
-    nvic_init.NVIC_IRQChannelSubPriority = 1;        
-    nvic_init.NVIC_IRQChannelCmd = ENABLE;
-    NVIC_Init(&nvic_init);
-}
-
-/**
- * @brief ¶¯Ì¬ÉèÖÃÄ£ÄâÇ°¶Ë·Å´óÆ÷(PGA112)µÄÔöÒæ±¶Êı
- * @param gain_code ÔöÒæµ²Î»±àÂë
- */
-static void Ultrasonic_ApplyGain(uint8_t gain_code)
-{
-    gain_code &= 0x07U;  // ÑÚÂë±£»¤£¬·ÀÖ¹·Ç·¨Ô½½ç
-    if(gain_code != g_ultrasonic_gain_code)
-    {
-        PGA112_SetGainCode(gain_code);
-        g_ultrasonic_gain_code = gain_code;
-        // ÔöÒæÌø±ä»áÒıÆğÔË·ÅÄÚ²¿¼ÄÉúµçÈİ³ä·ÅµçºÍµçÂ·Õğµ´£¬±ê¼Ç¶ªÆúÏÂÒ»´ÎÔàÊı¾İ
-        g_gain_settle_discard = 1; 
-    }
-}
-
-/**
- * @brief ¾àÀëÓëÉù³¡Ë¥¼õÔ¤¹À²ßÂÔ
- * @note ÉùÒôÔÚ¿ÕÆøÖĞ´«²¥×ñÑ­Ö¸ÊıË¥¼õºÍ·´Æ½·½¸ù¶¨ÂÉ¡£¾àÀëÔ½Ô¶£¬·µ»ØµÄĞÅºÅÔ½Èõ¡£
- * ÕâÀï¸ù¾İÀúÊ·»Ø²¨Ê±¼ä(´ú±í¾àÀë)£¬Ô¤²â±¾´ÎĞèÒªµÄÔöÒæ±¶Êı£¬±ÜÃâÔ¶¾àÀë»Ø²¨Ì«Èõ¼ì²â²»µ½¡£
- */
-static uint8_t Ultrasonic_SelectGainCode(uint32_t echo_us)
-{
-    if(echo_us < 180U)       return PGA112_GAIN_1;    // ¼«½ü£º²»·Å´ó
-    if(echo_us < 360U)       return PGA112_GAIN_2;    
-    if(echo_us < 800U)       return PGA112_GAIN_4;    
-    if(echo_us < 1800U)      return PGA112_GAIN_8;    
-    if(echo_us < 3600U)      return PGA112_GAIN_16;   // Ô¶¾àÀë£º¿ªÊ¼´ó·ù¶È·Å´ó
-    if(echo_us < 6500U)      return PGA112_GAIN_32;   
-    if(echo_us < 9500U)      return PGA112_GAIN_64;   
-    return PGA112_GAIN_128;                           // ¼«ÏŞ¾àÀë£º»ğÁ¦È«¿ª128±¶
-}
-
-/**
- * @brief ¹ÀËãÕæÊµ»Ø²¨µÄ²¨·åÊ±¼ä
- * @note »Ø²¨µçÂ·Êä³öµÄÍ¨³£ÊÇÒ»¸öÓĞ¿í¶ÈµÄ·½²¨¡£
- * »Ø²¨×îÇ¿µã(²¨·å)ÆäÊµ³öÏÖÔÚ·½²¨µÄÖĞĞÄÎ»ÖÃ¡£ËùÒÔÊµ¼ÊÊ±¼äÊÇ£ºÉÏÉıÑØÊ±¼ä + Âö¿íµÄÒ»°ë¡£
- */
-static uint32_t Ultrasonic_EstimatePeakTime(uint32_t rise_us, uint32_t fall_us)
-{
-    uint32_t width;
-
-    // Èİ´í´¦Àí£ºÈç¹ûÏÂ½µÑØÊ±¼äĞ¡ÓÚÉÏÉıÑØ(ËµÃ÷¼ÆÊıÆ÷·­×ª»òÊ±Ğò´íÂÒ)£¬Ö±½Ó·µ»ØÉÏÉıÑØÊ±¼ä
-    if(fall_us <= rise_us)
-    {
-        return rise_us;
-    }
-
-    width = fall_us - rise_us;
-    return rise_us + width / 2U; // ÖĞĞÄµã¶¨Î»
-}
-
-/**
- * @brief ×ÔÊÊÓ¦ÔöÒæ×¼±¸
- * @param retry_count Á¬Ğø²â¾àÊ§°ÜºóµÄ²¹³¥´ÎÊı
- */
-static void Ultrasonic_PrepareGain(uint8_t retry_count)
-{
-    // »ùÓÚÉÏÒ»´ÎÓĞĞ§»Ø²¨Ê±¼ä£¬ÍÆ¶Ï»ù´¡ÔöÒæµµÎ»
-    uint8_t gain_code = Ultrasonic_SelectGainCode(g_last_echo_us);
-
-    // Èç¹ûÁ¬Ğø²âÁ¿Ê§°Ü(Ã»ÊÕµ½»Ø²¨)£¬ËµÃ÷ĞÅºÅÌ«Èõ£¬Ã¿´ÎÖØÊÔ½«ÔöÒæÇ¿ÖÆÌ§¸ßÒ»¸öµ²Î»
-    if(retry_count > ULTRASONIC_GAIN_RETRY_MAX)
-    {
-        retry_count = ULTRASONIC_GAIN_RETRY_MAX;
-    }
-
-    gain_code = (uint8_t)(gain_code + retry_count);
-    if(gain_code > PGA112_GAIN_128)
-    {
-        gain_code = PGA112_GAIN_128; // ·ÀÖ¹Òç³ö×î´óµµÎ»
-    }
-
-    Ultrasonic_ApplyGain(gain_code);
-    delay_us(20); // Áô¸øÔË·ÅSPIÍ¨ĞÅºÍµçÂ·Ç÷ÓÚÎÈ¶¨µÄÊ±¼ä
-}
-
-/**
- * @brief ÎïÀí²ã£ºÖ´ĞĞµ¥´ÎÍêÕûµÄ³¬Éù²¨·¢ÉäÓë²¶»ñÁ÷³Ì
- * @return 1=²¶×½µ½»Ø²¨Âö³å£»0=³¬Ê±Î´¼ì²âµ½
- */
-static void Ultrasonic_SetAcceptWindow(uint32_t min_us, uint32_t max_us)
-{
-    if(max_us <= min_us)
-    {
-        min_us = 0;
-        max_us = ULTRASONIC_TIMEOUT_US;
-    }
-
-    g_echo_accept_min_us = min_us;
-    g_echo_accept_max_us = max_us;
-}
-
-
-static void Ultrasonic_SetTrackingWindow(void)
-{
-    const uint32_t margin_us = ULTRASONIC_TRACK_MARGIN_US;
-
-    if(g_reacquire_ignore_near != 0U)
-    {
-        Ultrasonic_SetAcceptWindow(ULTRASONIC_REACQUIRE_MIN_US, ULTRASONIC_TIMEOUT_US);
-    }
-    else if(g_tracking_valid == 0U)
-    {
-        Ultrasonic_SetAcceptWindow(0, ULTRASONIC_TIMEOUT_US);
-    }
-    else if(g_last_echo_us > margin_us)
-    {
-        Ultrasonic_SetAcceptWindow(g_last_echo_us - margin_us, g_last_echo_us + margin_us);
-    }
-    else
-    {
-        Ultrasonic_SetAcceptWindow(ULTRASONIC_BLANKING_US, g_last_echo_us + margin_us);
-    }
-}
-
-
-static uint8_t Ultrasonic_MeasureOnce(uint32_t *echo_us)
-{
-    uint32_t timeout;
-
-    // 1. ¸´Î»ËùÓĞÖĞ¶Ï×´Ì¬»ú±êÖ¾Î»
-    g_echo_captured = 0;
-    g_measure_active = 1;
-    g_echo_time_us = 0;
-    g_echo_rise_us = 0;
-    g_echo_fall_us = 0;
-    g_echo_rise_seen = 0;
-
-    // 2. ÇåÁãÎ¢Ãë¼¶Ãë±í£¬Çå³ı³Â¾ÉµÄÍâ²¿ÖĞ¶ÏÇëÇó
-    TIM_SetCounter(TIM5, 0);
-    EXTI_ClearITPendingBit(EXTI_Line0);
-    
-    // 3. Çı¶¯Ì½Í··¢ÉäÒ»Õó³¬Éù²¨Âö³åĞòÁĞ(Èç40kHz£¬8¸öÖÜÆÚ)
-    Ultrasonic_FireBurst();
-
-    // 4. µÈ´ı»Ø²¨(×èÈûÂÖÑ¯Ä£Ê½)
-    // Ã¿´Îdelay 10us£¬Ñ­»·´ÎÊı = ³¬Ê±×ÜÊ±¼ä / 10
-    for(timeout = 0; timeout < ULTRASONIC_TIMEOUT_US / 10U; timeout++)
-    {
-        // Èç¹ûÍâ²¿ÖĞ¶ÏÖĞ³É¹¦Íê³ÉÁËÉÏÉıÑØºÍÏÂ½µÑØ²¶×½£¬´Ë±êÖ¾½«±»ÖÃ1
-        if(g_echo_captured != 0U)
-        {
-            *echo_us = g_echo_time_us; // »ñÈ¡¼ÆËãºÃµÄÖĞĞÄ²¨·åÊ±¼ä
-            g_measure_active = 0;      // ¹Ø±Õ²âÁ¿´°¿Ú£¬ÆÁ±ÎºóĞøÔÓÉ¢ÔÓ²¨ÖĞ¶Ï
-            return 1;
-        }
-        delay_us(10);
-    }
-
-    // 5. ³¬Ê±Ê§°ÜÍË³ö
-    g_measure_active = 0;
-    return 0;
-}
-
-/**
- * @brief Ëã·¨²ã£ºÖ´ĞĞ´øÂË²¨µÄ³¬Éù²¨²âÁ¿(È¥¼«ÖµÆ½»¬Æ½¾ù·¨)
- * @note ÎªÊ²Ã´ĞèÒªÕâ²½£º¿ÕÆøÂÒÁ÷¡¢Ó²¼şÔëÉù¡¢±»²âÎïÌå²»Æ½Õû¼«Ò×µ¼ÖÂµ¥´Î¶ÁÊı³öÏÖÀëÆ×Ìø±ä¡£
- */
-static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us)
-{
-    uint32_t samples[ULTRASONIC_FILTER_SAMPLES]; // Ñù±¾³Ø
-    uint8_t valid_count = 0;                     // ÓĞĞ§Ñù±¾Êı
-    uint8_t attempts = 0;                        // ·¢Éä³¢ÊÔ×Ü´ÎÊı
-    uint8_t gain_retry = 0;                      // Ê§°ÜÖØÊÔÌ§ÉıÔöÒæ¼Æ²½Æ÷
-    uint8_t miss_count = 0;                      // ¸ú×Ù´°¿ÚÄÚÁ¬Ğø¶ªÊ§»Ø²¨µÄ´ÎÊı
-    uint8_t index;
-    uint32_t reacquire_min_us = ULTRASONIC_REACQUIRE_MIN_US;
-
-    if((g_calib_valid != 0U) && (g_calib.point_us[0] > reacquire_min_us))
-    {
-        reacquire_min_us = g_calib.point_us[0];
-    }
-
-    // ÔÚ×Ü³¢ÊÔ´ÎÊıºÄ¾¡Ç°£¬Å¬Á¦ÌîÂúËùĞèÑù±¾³Ø
-    while(attempts < (ULTRASONIC_FILTER_SAMPLES + 20U) && valid_count < ULTRASONIC_FILTER_SAMPLES)
-    {
-        uint32_t sample = 0;
-
-        Ultrasonic_PrepareGain(gain_retry); // ¶¯Ì¬Æ¥ÅäÔöÒæ
-        attempts++;
-
-        if(Ultrasonic_MeasureOnce(&sample) != 0U)
-        {
-            // Èç¹û¸Õ¸ÕÇĞ»»ÁËÔöÒæ£¬Ó²¼ş´¦ÓÚÕğµ´ÆÚ£¬Ö÷¶¯¶ªÆúÕâÖ¡ËäÈ»ÓĞĞ§µ«¿ÉÄÜ»û±äµÄÔàÊı¾İ
-            if(g_gain_settle_discard != 0U)
-            {
-                g_gain_settle_discard = 0;
-                delay_ms(8);
-                continue;
-            }
-
-            // ³É¹¦²É¼¯Ò»ÌõÓĞĞ§Êı¾İ´æÈë³ØÖĞ
-            if((g_reacquire_ignore_near != 0U) && (sample < reacquire_min_us))
-            {
-                continue;
-            }
-
-            samples[valid_count++] = sample;
-            g_last_echo_us = sample; // Ë¢ĞÂ²â¾àÀúÊ·¼ÇÒä
-            gain_retry = 0;          // ²É¼¯³É¹¦£¬ÖØÊÔÔöÒæ¼Æ²½ÇåÁã
-            miss_count = 0;
-            g_reacquire_ignore_near = 0U;
-        }
-        else
-        {
-            // Î´ÊÕµ½»Ø²¨´¦ÀíÂß¼­
-            if(g_gain_settle_discard != 0U)
-            {
-                g_gain_settle_discard = 0; // Í¬Ñù¶ªÆúÔöÒæ²»ÎÈ¶¨ÆÚµÄÊ§°Ü
-            }
-            else
-            {
-                if(gain_retry < ULTRASONIC_GAIN_RETRY_MAX)
-                {
-                    gain_retry++; // Ôö¼ÓÒ»¼¶ÔöÒæ£¬ÏÂ´Î³¢ÊÔ½ÓÊÕÎ¢Èõ»Ø²¨
-                }
-
-                if(g_tracking_valid != 0U)
-                {
-                    miss_count++;
-                    if(miss_count >= ULTRASONIC_REACQUIRE_MISSES)
-                    {
-                        valid_count = 0U;
-                        miss_count = 0U;
-                        g_tracking_valid = 0U;
-                        g_reacquire_ignore_near = 1U;
-                        g_last_echo_us = ULTRASONIC_TIMEOUT_US;
-                        gain_retry = ULTRASONIC_GAIN_RETRY_MAX;
-                        Ultrasonic_SetAcceptWindow(reacquire_min_us, ULTRASONIC_TIMEOUT_US);
-                    }
-                }
-            }
-        }
-        // ½µµÍÌ½Í··¢ÉäÕ¼¿Õ±È£¬·ÀÖ¹Éù²¨ÔÚÏÁĞ¡¿Õ¼ä·´Éä¶Ñ»ıĞÎ³É×¤²¨¸ÉÈÅ
-        delay_ms(8);
-    }
-
-    if(valid_count == 0U)
-    {
-        return 0; // ³¹µ×Ê§°Ü
-    }
-
-    // ½«ÊÕ¼¯µ½µÄÑù±¾½øĞĞÉıĞòÅÅĞò
-    Sort_Samples(samples, valid_count);
-    
-    // Ñ¡Ôñ×îÃÜ¼¯µÄÒ»´ØÑù±¾£¬±ÜÃâÁ½×é²»Í¬»Ø²¨±»Æ½¾ùµ½Ò»Æğ
-    if(valid_count >= 3U)
-    {
-        uint8_t best_start = 0U;
-        uint8_t best_count = 1U;
-        uint8_t best_mid;
-
-        for(index = 0U; index < valid_count; index++)
-        {
-            uint8_t count = 1U;
-            uint8_t scan;
-
-            for(scan = (uint8_t)(index + 1U); scan < valid_count; scan++)
-            {
-                if((samples[scan] - samples[index]) <= ULTRASONIC_CLUSTER_SPAN_US)
-                {
-                    count++;
-                }
-                else
-                {
-                    break;
-                }
-            }
-
-            if(count > best_count)
-            {
-                best_count = count;
-                best_start = index;
-            }
-        }
-
-        best_mid = (uint8_t)(best_start + best_count / 2U);
-        *echo_us = samples[best_mid];
-    }
-    else
-    {
-        *echo_us = samples[valid_count / 2U];
-    }
-
-    g_last_echo_us = *echo_us;
-    return 1;
-}
-
-/**
- * @brief Ê¹ÓÃ²åÈëÅÅĞòËã·¨¶Ô²ÉÑùÊı×é½øĞĞÉıĞòÅÅÁĞ
- */
-static void Sort_Samples(uint32_t *data, uint8_t length)
-{
-    uint8_t i;
-
-    // ¾­µäµÄ²åÈëÅÅĞòËã·¨
-    for(i = 1U; i < length; i++)
-    {
-        uint32_t key = data[i];
-        int8_t j = (int8_t)i - 1;
-
-        while(j >= 0 && data[j] > key)
-        {
-            data[j + 1] = data[j];
-            j--;
-        }
-        data[j + 1] = key;
-    }
-}
-
-/************************* Ğ£×¼Óë¾àÀë×ª»»Êı¾İ²ã *************************/
-/**
- * @brief ´ÓFlashÖĞ»½ĞÑ²¢¼ÓÔØÀúÊ·Ğ£×¼Êı¾İ
- */
-static void Calibration_Load(void)
-{
-    // ÀûÓÃCÓïÑÔÖ¸ÕëÌØĞÔ£¬Ö±½Ó½«Flash»ùµØÖ·Ç¿×ªÎª½á¹¹ÌåÖ¸Õë¶ÁÈ¡
-    const UltrasonicCalibData *stored = (const UltrasonicCalibData *)ULTRASONIC_FLASH_ADDR;
-    g_calib = *stored; 
-    g_calib_valid = Calibration_IsValid(&g_calib); 
-}
-
-/**
- * @brief Ğ£ÑéFlashÖĞ¶ÁÈ¡Êı¾İµÄºÏ·¨ĞÔ
- */
-static uint8_t Calibration_IsValid(const UltrasonicCalibData *calib)
-{
-    uint8_t index;
-
-    // 1. Ä§·¨×ÖºÍ°æ±¾·À´ôÀ¹½Ø
-    if(calib->magic != ULTRASONIC_FLASH_MAGIC || calib->version != ULTRASONIC_FLASH_VERSION)
-    {
-        return 0;
-    }
-
-    // 2. Âß¼­Ò»ÖÂĞÔĞ£Ñé£ºÎïÀíÊÀ½çÖĞ£¬¾àÀëÔ½Ô¶£¬·µ»ØÊ±¼ä±ØÈ»Ô½³¤
-    for(index = 0; index < 4U; index++)
-    {
-        if(calib->point_us[index] == 0U || calib->point_us[index] > ULTRASONIC_TIMEOUT_US)
-        {
-            return 0; // Êı¾İÔ½½ç
-        }
-        if(index > 0U && calib->point_us[index] <= calib->point_us[index - 1U])
-        {
-            return 0; // Èç¹û³öÏÖÁËºóÒ»¸ö±ê¶¨µãµÄÎ¢ÃëÊıĞ¡ÓÚµÈÓÚÇ°Ò»¸öµã£¬ËµÃ÷¼ÇÂ¼´íÂÒ
-        }
-    }
-
-    return 1;  
-}
-
-/**
- * @brief ½«Ğ£×¼Éú³ÉµÄ½á¹¹Ìå³Ö¾Ã»¯Ğ´ÈëFlash
- * @note FlashÓĞÊÙÃüÏŞÖÆ(Ô¼Ê®Íò´Î²ÁĞ´)£¬²»ÄÜÎŞ½ÚÖÆµ÷ÓÃ¸Ãº¯Êı¡£
- */
-static uint8_t Calibration_Save(const UltrasonicCalibData *calib)
-{
-    FLASH_Status status = FLASH_COMPLETE;
-    const uint32_t *words = (const uint32_t *)calib; 
-    uint32_t address = ULTRASONIC_FLASH_ADDR;
-    uint32_t index;
-
-    FLASH_Unlock(); // ¿ª·Å¶ÔFlash¿ØÖÆ¼Ä´æÆ÷µÄ·ÃÎÊÈ¨ÏŞ
-    
-    // Çå³ıÓÉÓÚÖ®Ç°Îó²Ù×÷ÒÅÁôµÄ´íÎó±êÖ¾Î»
-    FLASH_ClearFlag(FLASH_FLAG_EOP | FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR |
-                    FLASH_FLAG_PGAERR | FLASH_FLAG_PGPERR | FLASH_FLAG_PGSERR);
-    
-    // ±ØĞëÏÈ½«Sector11Õû¸öÉÈÇø²Á³ı(ËùÓĞÎ»±ä³É1)£¬FlashÖ»ÄÜ½«1Ğ´³É0£¬²»ÄÜ·´ÏòĞ´¡£
-    status = FLASH_EraseSector(FLASH_Sector_11, VoltageRange_3);
-    
-    if(status == FLASH_COMPLETE)
-    {
-        // Ã¿´ÎĞ´ÈëÒ»¸ö32Î»µÄÊı¾İ(Word)£¬Ñ­»·Ğ´Èë½á¹¹ÌåËùÓĞ¿Õ¼ä
-        for(index = 0; index < (sizeof(UltrasonicCalibData) / 4U); index++)
-        {
-            status = FLASH_ProgramWord(address, words[index]);
-            if(status != FLASH_COMPLETE)
-            {
-                break; 
-            }
-            address += 4U;  // ÄÚ´æµØÖ·µİÔö4×Ö½Ú
-        }
-    }
-    
-    FLASH_Lock(); // ÖØĞÂÉÏËø±£»¤´úÂëÇø
-
-    return (uint8_t)(status == FLASH_COMPLETE); 
-}
-
-/**
- * @brief ÎŞĞ£×¼Êı¾İÊ±µÄÀíÏëÎïÀí¹«Ê½»ØÍË·½°¸
- */
-static void Calibration_SetMeasureWindow(uint16_t distance_mm)
-{
-    switch(distance_mm)
-    {
-        case 100U:
-            Ultrasonic_SetAcceptWindow(ULTRASONIC_BLANKING_US, 2200U);
-            break;
-        case 600U:
-            Ultrasonic_SetAcceptWindow(2200U, 5000U);
-            break;
-        case 900U:
-            Ultrasonic_SetAcceptWindow(5000U, 7400U);
-            break;
-        case 2000U:
-            Ultrasonic_SetAcceptWindow(7400U, ULTRASONIC_TIMEOUT_US);
-            break;
-        default:
-            Ultrasonic_SetAcceptWindow(0, ULTRASONIC_TIMEOUT_US);
-            break;
-    }
-}
-
-
-static float Convert_Time_To_Distance_Default(uint32_t echo_us)
-{
-    // ÀíÏë¹«Ê½£º¾àÀë(mm) = Ê±¼ä(us) * 0.1715
-    float distance = (float)echo_us * 0.164866f;
-
-    // Êä³öÏŞ·ùÂË²¨Æ÷£ºÇ¯ÖÆÔÚÓ²¼şºÏÀíÁ¿³ÌÇø¼ä
-    if(distance < 10.0f) distance = 10.0f;
-    if(distance > 2000.0f) distance = 2000.0f;
-    return distance;
-}
-
-/**
- * @brief »ùÓÚÓÃ»§±ê¶¨Êı¾İµÄ·Ö¶ÎÏßĞÔ²åÖµ¾àÀë½áËã
- * @note ½«ÕæÊµ²â¾à¹ı³Ì²úÉúµÄÓ²¼şÏµÍ³ÑÓ³Ù¡¢ÉùËÙÎÂ¶ÈÆ¯ÒÆµÈ¸´ºÏÎó²î£¬
- * Í¨¹ı½¨Á¢4¸öÃªµãµÄ3¶ÎÕÛÏßº¯Êı£¬½üËÆÓ³ÉäÎªÏßĞÔ¹ØÏµ¡£
- */
-static float Convert_Time_To_Distance(uint32_t echo_us)
-{
-    uint8_t index;
-    float x0, x1;  // ºá×ø±ê£ºĞ£×¼Î¢ÃëÊ±¼ä
-    float y0, y1;  // ×İ×ø±ê£º±ê×¼ÎïÀí¾àÀë
-    float distance;
-
-    if(g_calib_valid == 0U)
-    {
-        return Convert_Time_To_Distance_Default(echo_us);
-    }
-
-    // ÅĞ¶Ïµ±Ç°»ñÈ¡µ½µÄ»Ø²¨Ê±¼ä£¬ÂäÔÚÄÄÒ»¶Î¡°ÕÛÏß¡±Çø¼äÄÚ
-    if(echo_us <= g_calib.point_us[1])
-    {
-        index = 0;  // µÚÒ»¶ÎÕÛÏß£º[»ù×¼µã0 - »ù×¼µã1]
-    }
-    else if(echo_us <= g_calib.point_us[2])
-    {
-        index = 1;  // µÚ¶ş¶ÎÕÛÏß£º[»ù×¼µã1 - »ù×¼µã2]
-    }
-    else
-    {
-        index = 2;  // µÚÈı¶ÎÕÛÏß£º[»ù×¼µã2 - »ù×¼µã3] (°üº¬ÍâÍÆÇø¼ä)
-    }
-
-    x0 = (float)g_calib.point_us[index];
-    x1 = (float)g_calib.point_us[index + 1U];
-    y0 = (float)k_calib_distance_mm[index];
-    y1 = (float)k_calib_distance_mm[index + 1U];
-
-    if(x1 <= x0) // Èİ´í±£»¤£º·ÀÖ¹·¢Éú³ı0±ÀÀ£
-    {
-        return Convert_Time_To_Distance_Default(echo_us);
-    }
-
-    /* * ºËĞÄËã·¨£ºÁ½µãÊ½Ö±Ïß·½³Ì±äĞÎÇó y Öµ£º
-     * $y = y_0 + (x - x_0) \frac{y_1 - y_0}{x_1 - x_0}$
-     */
-    distance = y0 + ((float)echo_us - x0) * (y1 - y0) / (x1 - x0);
-    
-    // Á¿³ÌÓ²Ô¼Êø
-    if(distance < (float)k_calib_distance_mm[0]) distance = (float)k_calib_distance_mm[0];
-    if(distance > 2000.0f) distance = 2000.0f;
-    return distance;
-}
-
-/************************* ²Ëµ¥Âß¼­´¦Àí½»»¥²ã(ÂÔÈ¥Ï¸×¢) *************************/
-static void MenuHandler_Measure(void)
-{
-    char value_text[24];
-
-    Draw_Work_Title("²âÁ¿Ä£Ê½");
-    Draw_Key_Tips("È·ÈÏ¿ªÊ¼²âÁ¿", "·µ»ØÍË³ö²âÁ¿");
-    g_tracking_valid = 0;
-    g_reacquire_ignore_near = 0U;
-    OS_String_Show(280, 150, 24, 1, "²âÁ¿Ê±¼ä(us)");
-    OS_String_Show(280, 180, 24, 1, "²âÁ¿¾àÀë(mm)");
-    OS_String_Show(280, 210, 24, 1, "Ä¬ÈÏ¾àÀë(mm)");
-    OS_String_Show(280, 240, 24, 1, "Ğ£×¼×´Ì¬");
-    OS_String_Show(280, 270, 24, 1, "Ç°¶ËÔöÒæ(x)");
-    OS_String_Show(280, 300, 24, 1, "ÌáÊ¾ĞÅÏ¢");
-    Show_Text_Value_Only(3, "Î´Ğ£×¼");
-    Show_Text_Value_Only(4, "008");
-    Show_Text_Value_Only(5, "µÈ´ı¿ªÊ¼");
-
-    while(Ps2KeyValue != KeyValue_Back)
-    {
-        uint32_t echo_us = 0;
-        Ultrasonic_SetTrackingWindow();
-        if(Ultrasonic_MeasureFiltered(&echo_us) != 0U)
-        {
-            float distance = Convert_Time_To_Distance(echo_us);
-            g_tracking_valid = 1;
-            sprintf(value_text, "%05lu", (unsigned long)echo_us);
-            Show_Text_Value_Only(0, value_text);
-            sprintf(value_text, "%06.1f", (double)distance);
-            Show_Text_Value_Only(1, value_text);
-            sprintf(value_text, "%06.1f", (double)Convert_Time_To_Distance_Default(echo_us));
-            Show_Text_Value_Only(2, value_text);
-            Show_Text_Value_Only(3, (g_calib_valid != 0U) ? "ÒÑĞ£×¼" : "Î´Ğ£×¼");
-            sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
-            Show_Text_Value_Only(4, value_text);
-            Show_Text_Value_Only(5, "²âÁ¿Õı³£");
-        }
-        else
-        {
-            g_reacquire_ignore_near = 1U;
-            g_tracking_valid = 0;
-            Show_Text_Value_Only(3, "²âÁ¿Ê§°Ü");
-            sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
-            Show_Text_Value_Only(4, value_text);
-            Show_Text_Value_Only(5, "¼ì²éÌ½Í·");
-        }
-        
-        delay_ms(120);
-    }
-
-    Ps2KeyValue = KeyValue_Null;
-    Change_Menu(0);
-}
-
-static void MenuHandler_Calibrate(void)
-{
-    UltrasonicCalibData new_calib;
-    uint8_t step = 0;
-    uint8_t last_step = 0xFFU;
-    char line[24];
-
-    // ³õÊ¼»¯ĞÂµÄĞ£×¼Í·
-    new_calib.magic = ULTRASONIC_FLASH_MAGIC;
-    new_calib.version = ULTRASONIC_FLASH_VERSION;
-    new_calib.point_us[0] = 0; new_calib.point_us[1] = 0;
-    new_calib.point_us[2] = 0; new_calib.point_us[3] = 0;
-    new_calib.reserved[0] = 0; new_calib.reserved[1] = 0;
-
-    Draw_Work_Title("Ğ£×¼Ä£Ê½");
-    Draw_Key_Tips("È·ÈÏ¿ªÊ¼Ğ£×¼", "·µ»ØÍË³öĞ£×¼");
-    OS_String_Show(280, 150, 24, 1, "Ğ£×¼ÌáÊ¾");
-    OS_String_Show(280, 180, 24, 1, "µ±Ç°×´Ì¬");
-    OS_String_Show(280, 210, 24, 1, "100mm(us)");
-    OS_String_Show(280, 240, 24, 1, "600mm(us)");
-    OS_String_Show(280, 270, 24, 1, "900mm(us)");
-    OS_String_Show(280, 300, 24, 1, "2000mm(us)");
-    OS_String_Show(280, 330, 24, 1, "µ±Ç°²âÖµ(us)");
-    OS_String_Show(280, 360, 24, 1, "Ğ£×¼½á¹û");
-    Show_Text_Value_Only(1, "µÈ´ıĞ£×¼");
-    Show_Text_Value_Only(2, "00000"); Show_Text_Value_Only(3, "00000");
-    Show_Text_Value_Only(4, "00000"); Show_Text_Value_Only(5, "00000");
-    Show_Text_Value_Only(6, "00000"); Show_Text_Value_Only(7, "µÈ´ıĞ£×¼");
-
-    while(Ps2KeyValue != KeyValue_Back)
-    {
-        if(step != last_step)
-        {
-            sprintf(line, "¶Ô×¼%04umm", k_calib_distance_mm[step]);
-            Show_Text_Value_Only(0, line);
-            last_step = step;
-        }
-
-        if(Ps2KeyValue == KeyValue_Enter)
-        {
-            uint32_t echo_us = 0;
-            Ps2KeyValue = KeyValue_Null;
-
-            Show_Text_Value_Only(0, "¿ªÊ¼Ğ£×¼");
-            Show_Text_Value_Only(1, "ÕıÔÚĞ£×¼");
-            Calibration_SetMeasureWindow(k_calib_distance_mm[step]);
-            if(Ultrasonic_MeasureFiltered(&echo_us) != 0U)
-            {
-                
-                new_calib.point_us[step] = echo_us;
-                sprintf(line, "%05lu", (unsigned long)echo_us);
-                Show_Text_Value_Only(6, line);
-                Show_Text_Value_Only((uint16_t)(2 + step), line);
-                Show_Text_Value_Only(1, "²ÉÑùÍê³É");
-
-                step++;
-                // ²É¼¯Íê4¸ö±ê¶¨µãºó£¬´¥·¢Ğ´ÈëFlashÂß¼­
-                if(step >= 4U) 
-                {
-                    uint8_t valid_ok = Calibration_IsValid(&new_calib);
-                    uint8_t save_ok = 0U;
-
-                    if(valid_ok != 0U)
-                    {
-                        save_ok = Calibration_Save(&new_calib);
-                    }
-
-                    if(valid_ok != 0U && save_ok != 0U)
-                    {
-                        g_calib = new_calib;
-                        g_calib_valid = 1;
-                        Show_Text_Value_Only(7, "Ğ£×¼Íê³É  ");
-                    }
-                    else if(valid_ok == 0U)
-                    {
-                        Show_Text_Value_Only(1, "¼ì²éµãÎ»");
-                        Show_Text_Value_Only(7, "POINT ERR ");
-                    }
-                    else
-                    {
-                        Show_Text_Value_Only(1, "Ğ´ÈëÊ§°Ü");
-                        Show_Text_Value_Only(7, "FLASH ERR ");
-                    }
-                    delay_ms(1000);
-                    break;
-                }
-            }
-            else
-            {
-                Show_Text_Value_Only(1, "Ğ£×¼³¬Ê±");
-                Show_Text_Value_Only(7, "Ğ£×¼Ê§°Ü");
-            }
-            Show_Text_Value_Only(7, "ËÉ¿ªÈ·ÈÏ¼ü");
-            Wait_Ps2KeyRelease(KeyValue_Enter);
-        }
-        delay_ms(20);
-    }
-
-    Ps2KeyValue = KeyValue_Null;
-    Ultrasonic_SetAcceptWindow(0, ULTRASONIC_TIMEOUT_US);
-    Change_Menu(0);
-}
-
-static void MenuHandler_Status(void)
-{
-    char value_text[24];
-
-    Draw_Work_Title("ÏµÍ³×´Ì¬");
-    Draw_Key_Tips("È·ÈÏ²é¿´²âÁ¿", "·µ»ØÍË³ö²é¿´");
-    Ultrasonic_SetAcceptWindow(0, ULTRASONIC_TIMEOUT_US);
-    OS_String_Show(280, 150, 24, 1, "Ğ£×¼×´Ì¬");
-    OS_String_Show(280, 180, 24, 1, "Ğ£×¼µã1(us)");
-    OS_String_Show(280, 210, 24, 1, "Ğ£×¼µã2(us)");
-    OS_String_Show(280, 240, 24, 1, "Ğ£×¼µã3(us)");
-    OS_String_Show(280, 270, 24, 1, "Ğ£×¼µã4(us)");
-    OS_String_Show(280, 300, 24, 1, "µ±Ç°ÔöÒæ(x)");
-    OS_String_Show(280, 330, 24, 1, "ÊµÊ±²âÁ¿Ê±¼ä(us)");
-    OS_String_Show(280, 360, 24, 1, "ÊµÊ±²âÁ¿¾àÀë(mm)");
-
-    Show_Text_Value_Only(0, (g_calib_valid != 0U) ? "Ğ£×¼ÓĞĞ§" : "Êı¾İÎŞĞ§");
-    sprintf(value_text, "%05lu", (unsigned long)g_calib.point_us[0]); Show_Text_Value_Only(1, value_text);
-    sprintf(value_text, "%05lu", (unsigned long)g_calib.point_us[1]); Show_Text_Value_Only(2, value_text);
-    sprintf(value_text, "%05lu", (unsigned long)g_calib.point_us[2]); Show_Text_Value_Only(3, value_text);
-    sprintf(value_text, "%05lu", (unsigned long)g_calib.point_us[3]); Show_Text_Value_Only(4, value_text);
-    sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code)); Show_Text_Value_Only(5, value_text);
-    Show_Text_Value_Only(6, "00000");
-    Show_Text_Value_Only(7, "0000.0");
-
-    while(Ps2KeyValue != KeyValue_Back)
-    {
-        if(Ps2KeyValue == KeyValue_Enter)
-        {
-            uint32_t echo_us = 0;
-            Ps2KeyValue = KeyValue_Null;
-            if(Ultrasonic_MeasureFiltered(&echo_us) != 0U)
-            {
-                sprintf(value_text, "%05lu", (unsigned long)echo_us);
-                Show_Text_Value_Only(6, value_text);
-                sprintf(value_text, "%06.1f", (double)Convert_Time_To_Distance(echo_us));
-                Show_Text_Value_Only(7, value_text);
-            }
-            else
-            {
-                Show_Text_Value_Only(6, "²âÁ¿Ê§°Ü");
-                Show_Text_Value_Only(7, "0000.0");
-            }
-        }
-        delay_ms(20);
-    }
-
-    Ps2KeyValue = KeyValue_Null;
-    Change_Menu(0);
-}
-
-static void MenuHandler_PGA_Test(void)
-{
-    uint8_t gain_index = 3U;
-    const uint8_t gain_codes[8] =
-    {
-        PGA112_GAIN_1, PGA112_GAIN_2, PGA112_GAIN_4, PGA112_GAIN_8,
-        PGA112_GAIN_16, PGA112_GAIN_32, PGA112_GAIN_64, PGA112_GAIN_128
-    };
-    char value_text[24];
-
-    Ultrasonic_PWM_OutputEnable();
-    Ultrasonic_ApplyGain(gain_codes[gain_index]);
-
-    Draw_Work_Title("³Ì¿ØÔöÒæµ÷½Ú");
-    Draw_Key_Tips("+/-µ÷½ÚÔöÒæ", "BackÍË³ö²¢¹Ø±ÕPWM");
-    OS_String_Show(280, 150, 24, 1, "PWMÊä³ö×´Ì¬");
-    OS_String_Show(280, 180, 24, 1, "Êä³ö·½Ê½");
-    OS_String_Show(280, 210, 24, 1, "Êä³öÆµÂÊ(Hz)");
-    OS_String_Show(280, 240, 24, 1, "Êä³öÕ¼¿Õ±È(%)");
-    OS_String_Show(280, 270, 24, 1, "µ±Ç°ÔöÒæ(x)");
-    OS_String_Show(280, 300, 24, 1, "ÔöÒæµµÎ»");
-    OS_String_Show(280, 330, 24, 1, "²¨ĞÎËµÃ÷");
-    OS_String_Show(280, 360, 24, 1, "µ±Ç°ÌáÊ¾");
-
-    Show_Text_Value_Only(0, "¿ªÆô");
-    Show_Text_Value_Only(1, "»¥²¹PWM");
-    Show_Text_Value_Only(2, "040000");
-    Show_Text_Value_Only(3, "050");
-    sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
-    Show_Text_Value_Only(4, value_text);
-    Show_Text_Value_Only(5, "1/2/4/8/16/32/64/128");
-    Show_Text_Value_Only(6, "PD12/PD13Êä³ö");
-    Show_Text_Value_Only(7, "µÈ´ıµ÷½Ú");
-
-    while(Ps2KeyValue != KeyValue_Back)
-    {
-        if(Ps2KeyValue == KeyValue_Add)
-        {
-            Ps2KeyValue = KeyValue_Null;
-            if(gain_index < 7U)
-            {
-                gain_index++;
-                Ultrasonic_ApplyGain(gain_codes[gain_index]);
-                sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
-                Show_Text_Value_Only(4, value_text);
-                Show_Text_Value_Only(7, "ÔöÒæÒÑµ÷´ó");
-            }
-            else
-            {
-                Show_Text_Value_Only(7, "ÒÑµ½×î´óÔöÒæ");
-            }
-        }
-        else if(Ps2KeyValue == KeyValue_Minus)
-        {
-            Ps2KeyValue = KeyValue_Null;
-            if(gain_index > 0U)
-            {
-                gain_index--;
-                Ultrasonic_ApplyGain(gain_codes[gain_index]);
-                sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
-                Show_Text_Value_Only(4, value_text);
-                Show_Text_Value_Only(7, "ÔöÒæÒÑµ÷Ğ¡");
-            }
-            else
-            {
-                Show_Text_Value_Only(7, "ÒÑµ½×îĞ¡ÔöÒæ");
-            }
-        }
-        delay_ms(20);
-    }
-
-    Ultrasonic_PWM_OutputDisable();
-    Ps2KeyValue = KeyValue_Null;
-    Change_Menu(0);
-}
-
-/************************* ÖĞ¶Ï·şÎñº¯Êı *************************/
-
-/**
- * @brief EXTI0Íâ²¿ÖĞ¶Ï·şÎñº¯Êı (»Ø²¨ĞÅºÅ²¶×½×´Ì¬»ú)
- * @note µ±»Ø²¨Òı½Å(PC0)µçÆ½·´×ªÊ±£¬´¥·¢¸ÃÖĞ¶Ï¡£
- * ×´Ì¬»úÁ÷×ª£º¹ıÂËÃ¤Çø -> ²¶×½ÉÏÉıÑØ -> ²¶×½ÏÂ½µÑØ -> »»ËãÖĞĞÄµãÊ±¼ä
- */
-void EXTI0_IRQHandler(void)
-{
-    // ¼ì²éÊÇ·ñÊÇÓÉÓÚLine0Òı·¢µÄÖĞ¶Ï
-    if(EXTI_GetITStatus(EXTI_Line0) != RESET)
-    {
-        // Ö»ÓĞÈí¼ş¿ªÆôÁËÔÊĞí²âÁ¿´°¿Ú£¬²Å¶ÔÍâ²¿Òı½Å²¨¶¯½øĞĞÏìÓ¦£¬±ÜÃâÔÓ²¨¸ÉÈÅÏµÍ³
-        if(g_measure_active != 0U)
-        {
-            uint32_t now = TIM_GetCounter(TIM5); // »ñÈ¡´¥·¢Ë²¼äµÄÏµÍ³Î¢ÃëÊı
-
-            // ×´Ì¬»ú½×¶Î 1£º¹ıÂËÓ²¼ş·¢ÉäÊ±ÓÉÓÚ×ÔÉíñîºÏ²úÉúµÄ¼«½ü¾àÀëÇ¿»Ø²¨Ã¤Çø(ÀıÈç450us)
-            if(now >= ULTRASONIC_BLANKING_US)
-            {
-                // ¶ÁÈ¡Òı½Åµ±Ç°×´Ì¬£¬Èç¹ûÊÇ¸ßµçÆ½£¬ËµÃ÷±¾´ÎÊÇÉÏÉıÑØÖĞ¶Ï
-                if(GPIO_ReadInputDataBit(GPIOC, GPIO_Pin_0) != Bit_RESET)
-                {
-                    // ×´Ì¬»ú½×¶Î 2£ºÈç¹ûÖ®Ç°»¹Ã»¼ÇÂ¼¹ıÉÏÉıÑØ£¬ÄÇÃ´¾Í¼ÇÂ¼ÕâÒ»¿ÌÎªÆğµã
-                    if((g_echo_rise_seen == 0U) && (now >= g_echo_accept_min_us))
-                    {
-                        g_echo_rise_us = now;
-                        g_echo_rise_seen = 1U;
-                    }
-                }
-                // ¶ÁÈ¡Òı½ÅÊÇµÍµçÆ½£¬ÇÒÉÏÉıÑØÒÑ±»¼ÇÂ¼£¬ÇÒµ±Ç°Ê±¼ä´óÓÚÉÏÉıÑØ(Âß¼­·À´ô)£¬ËµÃ÷±¾´ÎÊÇÏÂ½µÑØÖĞ¶Ï
-                else if(g_echo_rise_seen != 0U && now > g_echo_rise_us)
-                {
-                    // ×´Ì¬»ú½×¶Î 3£º¼ÇÂ¼ÏÂ½µÑØ£¬²¢¼ÆËãÓĞĞ§Ê±¿í
-                    g_echo_fall_us = now;
-                    g_echo_time_us = Ultrasonic_EstimatePeakTime(g_echo_rise_us, g_echo_fall_us);
-                    
-                    // ×´Ì¬»ú½×¶Î 4£º×îºóÒ»µÀ±£ÏÕ£¬¹ıÂË¼«Õ­Ã«´Ì(¿ÉÄÜÓÉÆäËûµç»úÕğ¶¯»ò¾²µçµ¼ÖÂ)
-                    if((g_echo_time_us >= ULTRASONIC_MIN_VALID_US) &&
-                       ((g_echo_fall_us - g_echo_rise_us) >= ULTRASONIC_MIN_PULSE_WIDTH_US) &&
-                       (g_echo_time_us >= g_echo_accept_min_us) &&
-                       (g_echo_time_us <= g_echo_accept_max_us))
-                    {
-                        g_echo_captured = 1U;    // ±ê¼ÇÖ÷Ñ­»·¿ÉÒÔÊÕÍøÌáÈ¡Êı¾İÁË
-                        g_measure_active = 0U;   // ³¹µ×¹Ø±Õ±¾ÂÖ²âÁ¿´°¿Ú
-                    }
-                    else
-                    {
-                        g_echo_rise_seen = 0U;
-                        g_echo_rise_us = 0U;
-                        g_echo_fall_us = 0U;
-                    }
-                }
-            }
-        }
-        // ÇåÀíÖĞ¶Ï¹ÒÆğ±êÖ¾Î»£¬×¼±¸Ó­½ÓÏÂÒ»´Î´¥·¢
-        EXTI_ClearITPendingBit(EXTI_Line0);
-    }
-}
+#include "User.h"
+#include "Drive_PWM.h"
+
+/************************* è¶…å£°æ³¢æ¨¡å—å‚æ•°é…ç½® *************************/
+/*
+ * ç‰©ç†åŸç†ï¼šå¸¸æ¸©ç©ºæ°”ä¸­å£°é€Ÿ â‰ˆ 343 m/s
+ * 1Î¼s å£°æ³¢å•ç¨‹è·ç¦»ï¼š343 * 100 / 1000000 = 0.0343 cm = 0.343 mm
+ * è¶…å£°æ³¢å¾€è¿”æµ‹è·ï¼Œå› æ­¤ 1Î¼s å¯¹åº”å®é™…è·ç¦»ï¼š0.343 / 2 = 0.1715 mm
+ */
+// æµ‹é‡è¶…æ—¶æ—¶é—´(Î¼s)ï¼šå¯¹åº”æœ€å¤§æµ‹è·çº¦2mï¼Œç†è®ºå¾€è¿”æ—¶é—´â‰ˆ11662Î¼sï¼Œé¢„ç•™ä½™é‡è®¾ä¸º12000Î¼s
+#define ULTRASONIC_TIMEOUT_US        12000U
+// æœ€å°æœ‰æ•ˆå›æ³¢æ—¶é—´(Î¼s)ï¼šæ»¤é™¤ç”µè·¯ä¸²æ‰°ã€é™ç”µäº§ç”Ÿçš„æçŸ­å¹²æ‰°è„‰å†²
+#define ULTRASONIC_MIN_VALID_US      20U
+// å›æ³¢è„‰å†²æœ€å°å®½åº¦(Î¼s)ï¼šå°äºè¯¥å€¼åˆ¤å®šä¸ºæ¯›åˆºå¹²æ‰°ï¼Œä¸¢å¼ƒ
+#define ULTRASONIC_MIN_PULSE_WIDTH_US  30U
+// å‘å°„ç›²åŒº/æ¶ˆéšæ—¶é—´(Î¼s)ï¼šæ¢å¤´å‘å°„åå­˜åœ¨æœºæ¢°ä½™éœ‡+ç”µè·¯è‡ªæ¿€ï¼Œæ­¤æ®µæ—¶é—´å±è”½æ¥æ”¶
+// 450Î¼sç›²åŒºå¯¹åº”è¿‘è·ç¦»çº¦ 7.7cmï¼Œé¿å…è¿‘è·è‡ªæ¿€è¯¯è§¦å‘
+#define ULTRASONIC_BLANKING_US       450U   
+// æ»¤æ³¢é‡‡æ ·æ¬¡æ•°ï¼šå•æ¬¡æœ‰æ•ˆæµ‹è·é‡‡é›†Nç»„æ ·æœ¬ï¼Œé…åˆå»æå€¼ã€èšç±»ç®—æ³•é™å™ª
+#define ULTRASONIC_FILTER_SAMPLES    60U
+// æ ·æœ¬èšç±»åŒºé—´(Î¼s)ï¼šåˆ¤å®šä¸¤ç»„é‡‡æ ·å€¼æ˜¯å¦å±äºåŒä¸€æœ‰æ•ˆå›æ³¢ç°‡
+#define ULTRASONIC_CLUSTER_SPAN_US   180U
+// å¢ç›Šæœ€å¤§é‡è¯•æ¬¡æ•°ï¼šå›æ³¢å¾®å¼±æœªæ£€æµ‹åˆ°æ—¶ï¼Œé€çº§æŠ¬å‡PGAå¢ç›Šçš„æœ€å¤§å°è¯•æ¬¡æ•°
+#define ULTRASONIC_GAIN_RETRY_MAX    3U
+// è·Ÿè¸ªçª—å£ä½™é‡(Î¼s)ï¼šé”å®šæœ‰æ•ˆå›æ³¢åï¼Œåœ¨å†å²å€¼åŸºç¡€ä¸Šæ‰©å±•çª—å£èŒƒå›´ï¼ŒåŠ¨æ€è·Ÿè¸ªç›®æ ‡
+#define ULTRASONIC_TRACK_MARGIN_US   3000U
+// è¿ç»­ä¸¢å¤±å›æ³¢æ¬¡æ•°é˜ˆå€¼ï¼šè¶…è¿‡è¯¥å€¼åˆ¤å®šç›®æ ‡ä¸¢å¤±ï¼Œé‡æ–°å…¨åŸŸæœç´¢
+#define ULTRASONIC_REACQUIRE_MISSES  2U
+// é‡æœç´¢æ¨¡å¼ä¸‹æœ€å°æ¥æ”¶æ—¶é—´(Î¼s)ï¼šå±è”½è¿‘è·ç¦»è‡ªæ¿€å¹²æ‰°ï¼Œä¸“æ³¨è¿œè·ç¦»æœç´¢
+#define ULTRASONIC_REACQUIRE_MIN_US  650U
+// æ ¡å‡†æ•°æ®Flashå­˜å‚¨åœ°å€ï¼šSTM32F407 Sector11èµ·å§‹åœ°å€(Flashæœ€å128KBæ‰‡åŒº)
+// é€‰ç”¨æœ«å°¾æ‰‡åŒºï¼Œé¿å…ä¸ç¨‹åºä»£ç åŒº(0x08000000å¼€å§‹)å†²çª
+#define ULTRASONIC_FLASH_ADDR        0x080E0000U
+// Flashæ•°æ®é­”æ•°ï¼šASCII "USON" (0x55 0x53 0x4F 0x4E)
+// ä¸Šç”µæ ¡éªŒé­”æ•°ï¼Œåˆ¤æ–­FlashåŒºåŸŸæ˜¯å¦ä¸ºåˆæ³•æ ¡å‡†æ•°æ®ï¼ŒåŒºåˆ†ç©ºç™½/ä¹±ç 
+#define ULTRASONIC_FLASH_MAGIC       0x55534F4EU  
+// æ•°æ®ç‰ˆæœ¬å·ï¼šç»“æ„ä½“/å­—æ®µå˜æ›´æ—¶å‡çº§ç‰ˆæœ¬ï¼Œä½¿æ—§ç‰ˆæ ¡å‡†æ•°æ®è‡ªåŠ¨å¤±æ•ˆï¼Œé˜²æ­¢è§£æé”™è¯¯
+#define ULTRASONIC_FLASH_VERSION     0x00010004U  
+
+/************************* å±å¹•æ˜¾ç¤ºå¸¸é‡å®šä¹‰ *************************/
+#define TITLE_STR        "è¶…å£°æ³¢æµ‹è·ä»ª"         // ä¸»ç•Œé¢é¡¶éƒ¨æ ‡é¢˜
+#define MODEL_VER_STR    "å‹å·ï¼šHC-SR04"       // ç¡¬ä»¶å‹å·æ ‡æ³¨
+#define USER_VER_STR     "ç‰ˆæœ¬ï¼šV1.0"          // è½¯ä»¶ç‰ˆæœ¬å·
+#define MENU1_CHOICE1    "1. å®æ—¶æµ‹é‡"         // èœå•é€‰é¡¹1
+#define MENU1_CHOICE2    "2. è·ç¦»æ ¡å‡†"         // èœå•é€‰é¡¹2
+#define MENU1_CHOICE3    "3. ç³»ç»ŸçŠ¶æ€"         // èœå•é€‰é¡¹3
+#define MENU1_CHOICE4    "4. ç¨‹æ§è°ƒèŠ‚"         // èœå•é€‰é¡¹4
+#define MENU_CHOICE_NUM  4                    // èœå•æ€»æ•°é‡
+
+// å±€éƒ¨æ¸…å±ç©ºç™½ä¸²ï¼šç”¨ç©ºæ ¼è¦†ç›–åŸæœ‰å­—ç¬¦ï¼Œæ¯”å…¨å±€æ¸…å±LCD_Clearæ•ˆç‡æ›´é«˜ï¼Œå‡å°‘åˆ·å±é—ªçƒ
+#define UI_BLANK_TEXT_16 "                                                                "  // 16å·å­—ä½“ 64å­—ç¬¦ç©ºæ ¼
+#define UI_BLANK_TEXT_24 "                                                "                // 24å·å­—ä½“ 48å­—ç¬¦ç©ºæ ¼
+#define UI_BLANK_TEXT_32 "                                "                                // 32å·å­—ä½“ 32å­—ç¬¦ç©ºæ ¼
+#define UI_VALUE_BLANK_24 "                        "                                       // æ•°å€¼åŒºä¸“ç”¨ç©ºç™½ä¸²
+
+/************************* æ•°æ®ç»“æ„å®šä¹‰ *************************/
+
+/**
+ * @brief è¶…å£°æ³¢åˆ†æ®µçº¿æ€§æ ¡å‡†æ•°æ®ç»“æ„ä½“
+ * @note ç”¨äºä¿®æ­£ç¡¬ä»¶å»¶è¿Ÿã€å£°é€Ÿæ¼‚ç§»ã€ç”µè·¯éçº¿æ€§è¯¯å·®ï¼Œé‡‡ç”¨å¤šç‚¹åˆ†æ®µæ’å€¼æ ¡å‡†
+ * @attention ç»“æ„ä½“è‡ªç„¶4å­—èŠ‚å¯¹é½ï¼Œé€‚é…Flash 32bitå­—å†™å…¥è§„åˆ™
+ */
+typedef struct
+{
+    uint32_t magic;               // æ•°æ®åˆæ³•æ€§é­”æ•°æ ‡å¿—
+    uint32_t version;             // ç»“æ„ä½“ç‰ˆæœ¬å·
+    uint32_t point_us[5];         // å­˜å‚¨5ä¸ªæ ‡å‡†è·ç¦»ä¸‹å®é™…æµ‹å¾—çš„å›æ³¢æ—¶é—´(Î¼s)
+    uint32_t reserved[1];         // é¢„ç•™ç©ºé—´ï¼Œä¿è¯ç»“æ„ä½“æ€»å¤§å°32å­—èŠ‚
+} UltrasonicCalibData;
+
+// 5ç»„åŸºå‡†æ ¡å‡†è·ç¦»(å•ä½ï¼šmm)ï¼Œè¦†ç›–è¿‘ã€ä¸­ã€è¿œå…¨é‡ç¨‹åŒºé—´
+static const uint16_t k_calib_distance_mm[5] = {100, 300, 600, 900, 1300};
+
+/************************* å…¨å±€å˜é‡å®šä¹‰ *************************/
+/*
+ * volatile å…³é”®å­—è¯´æ˜ï¼š
+ * ä»¥ä¸‹å˜é‡å‡åœ¨ã€å¤–éƒ¨ä¸­æ–­EXTIã€‘ä¸­ä¿®æ”¹ï¼Œvolatileå¼ºåˆ¶ç¼–è¯‘å™¨æ¯æ¬¡ä»å†…å­˜è¯»å–ï¼Œ
+ * ç¦æ­¢ç¼–è¯‘å™¨ä¼˜åŒ–ï¼Œé˜²æ­¢ä¸­æ–­ä¸ä¸»å¾ªç¯å˜é‡ä¸åŒæ­¥ã€çŠ¶æ€æœºå¡æ­»ã€‚
+ */
+static volatile uint8_t g_echo_captured = 0;    // å›æ³¢æ•è·å®Œæˆæ ‡å¿— 1=æˆåŠŸ 0=æœªå®Œæˆ
+static volatile uint8_t g_measure_active = 0;   // æµ‹é‡çª—å£ä½¿èƒ½æ ‡å¿— 1=å…è®¸ä¸­æ–­æ¥æ”¶å›æ³¢ 0=å±è”½
+static volatile uint32_t g_echo_time_us = 0;    // æœ€ç»ˆè®¡ç®—å¾—åˆ°çš„å›æ³¢å³°å€¼æ—¶é—´(Î¼s)
+static volatile uint32_t g_echo_rise_us = 0;    // å›æ³¢è„‰å†²ä¸Šå‡æ²¿æ—¶åˆ»(Î¼s)
+static volatile uint32_t g_echo_fall_us = 0;    // å›æ³¢è„‰å†²ä¸‹é™æ²¿æ—¶åˆ»(Î¼s)
+static volatile uint8_t g_echo_rise_seen = 0;   // çŠ¶æ€æœºæ ‡å¿—ï¼šæ˜¯å¦å·²æ£€æµ‹åˆ°ä¸Šå‡æ²¿
+static volatile uint32_t g_echo_accept_min_us = 0;  // å›æ³¢æ¥æ”¶çª—å£ä¸‹é™(Î¼s)
+static volatile uint32_t g_echo_accept_max_us = ULTRASONIC_TIMEOUT_US; // å›æ³¢æ¥æ”¶çª—å£ä¸Šé™(Î¼s)
+
+static uint8_t g_gain_settle_discard = 0;       // å¢ç›Šåˆ‡æ¢æ ‡å¿—ï¼š1=ä¸¢å¼ƒæœ¬æ¬¡æµ‹é‡(è¿æ”¾ç”µè·¯éœ€ç¨³å®šæ—¶é—´)
+static uint32_t g_last_echo_us = 1500U;         // ä¸Šä¸€æ¬¡æœ‰æ•ˆå›æ³¢æ—¶é—´ï¼Œç”¨äºé¢„æµ‹å½“å‰å¢ç›Šæ¡£ä½
+static uint8_t g_tracking_valid = 0;           // è·Ÿè¸ªçª—å£æ ‡å¿— 1=å·²é”å®šæœ‰æ•ˆå›æ³¢ï¼Œå¼€å¯çª„çª—å£è·Ÿè¸ª
+static uint8_t g_reacquire_ignore_near = 0;     // é‡æœç´¢æ ‡å¿— 1=å±è”½è¿‘è·ç¦»ä¿¡å·ï¼Œä¸“æ³¨è¿œè·ç¦»æœç´¢
+static uint8_t g_ultrasonic_gain_code = PGA112_DEFAULT_GAIN_CODE; // å½“å‰PGA112å¢ç›Šç¼–ç 
+
+// æ ¡å‡†ç›¸å…³å˜é‡
+static UltrasonicCalibData g_calib = {0};       // RAMä¸­ç¼“å­˜çš„æ ¡å‡†æ•°æ®
+static uint8_t g_calib_valid = 0;               // æ ¡å‡†æ•°æ®æœ‰æ•ˆæ ‡å¿— 1=Flashæ•°æ®åˆæ³• 0=ä½¿ç”¨ç†æƒ³å…¬å¼
+
+// ç•Œé¢çŠ¶æ€æœºï¼šèœå•åˆ‡æ¢æ ‡å¿—
+static uint8_t g_menu_sign = 0;                // 0=ä¸»èœå• 1=å®æ—¶æµ‹é‡ 2=è·ç¦»æ ¡å‡† 3=ç³»ç»ŸçŠ¶æ€ 4=ç¨‹æ§å¢ç›Š
+
+/************************* å‡½æ•°å£°æ˜ *************************/
+// ç³»ç»Ÿåˆå§‹åŒ– + ä¸»ç•Œé¢ç»˜åˆ¶
+static void Init_All(void);
+static void Disp_Main(void);
+static void Change_Menu(uint8_t menu_sign);
+
+// UIå·¥å…·å‡½æ•°ï¼šå±€éƒ¨æ¸…å±ã€æ–‡å­—ç»˜åˆ¶ã€æŒ‰é”®ç­‰å¾…
+static void Clear_Work_Area(void);
+static void Clear_Work_Text(void);
+static void Draw_Work_Title(char *title);
+static void Draw_Key_Tips(char *tip1, char *tip2);
+static void Show_Text_Line(uint16_t line, char *text);
+static void Show_Value_Line(uint16_t line, char *label, double value, char *format);
+static void Show_Value_Only(uint16_t line, double value, char *format);
+static void Show_Text_Value_Only(uint16_t line, char *text);
+static void Wait_Ps2KeyRelease(uint8_t key_value);
+
+// è¶…å£°æ³¢ç¡¬ä»¶åº•å±‚é©±åŠ¨ï¼šå®šæ—¶å™¨ã€å¤–éƒ¨ä¸­æ–­ã€PGAå¢ç›Šã€å•æ¬¡æµ‹é‡
+static void Ultrasonic_Timer_Init(void);
+static void Ultrasonic_Echo_Init(void);
+static void Ultrasonic_ApplyGain(uint8_t gain_code);
+static uint8_t Ultrasonic_SelectGainCode(uint32_t echo_us);
+static uint32_t Ultrasonic_EstimatePeakTime(uint32_t rise_us, uint32_t fall_us);
+static void Ultrasonic_PrepareGain(uint8_t retry_count);
+static void Ultrasonic_SetAcceptWindow(uint32_t min_us, uint32_t max_us);
+static void Ultrasonic_SetTrackingWindow(void);
+static uint8_t Ultrasonic_MeasureOnce(uint32_t *echo_us);
+static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us);
+static void Sort_Samples(uint32_t *data, uint8_t length);
+
+// æ ¡å‡†ã€Flashè¯»å†™ã€æ—¶é—´-è·ç¦»è½¬æ¢ç®—æ³•
+static void Calibration_Load(void);
+static uint8_t Calibration_IsValid(const UltrasonicCalibData *calib);
+static uint8_t Calibration_Save(const UltrasonicCalibData *calib);
+static void Calibration_SetMeasureWindow(uint16_t distance_mm);
+static float Convert_Time_To_Distance(uint32_t echo_us);
+static float Convert_Time_To_Distance_Default(uint32_t echo_us);
+
+// å„èœå•ä¸šåŠ¡é€»è¾‘å¤„ç†å‡½æ•°
+static void MenuHandler_Measure(void);
+static void MenuHandler_Calibrate(void);
+static void MenuHandler_Status(void);
+static void MenuHandler_PGA_Test(void);
+
+/************************* ä¸»å‡½æ•° *************************/
+/**
+ * @brief åº”ç”¨å±‚ä¸»å…¥å£å‡½æ•°ï¼Œè£¸æœºçŠ¶æ€æœºæ¡†æ¶
+ * @note æ— é™å¾ªç¯ä¸­æ£€æµ‹èœå•çŠ¶æ€ï¼Œæ‰§è¡Œå¯¹åº”åŠŸèƒ½æ¨¡å—ï¼Œå¹¶å“åº”PS2é”®ç›˜è¾“å…¥
+ */
+void User_main(void)
+{
+    Init_All();          // åˆå§‹åŒ–æ‰€æœ‰ç¡¬ä»¶ã€è¯»å–Flashæ ¡å‡†æ•°æ®
+    Disp_Main();         // ç»˜åˆ¶ä¸»èœå•é™æ€ç•Œé¢
+
+    // è£¸æœºæ­»å¾ªç¯ + çŠ¶æ€æœºæ¶æ„ï¼Œè½®è¯¢èœå•ä¸æŒ‰é”®
+    while(1)
+    {
+        switch(g_menu_sign)
+        {
+            case 0:  // ä¸»èœå•çŠ¶æ€ï¼šè½®è¯¢æŒ‰é”®ï¼Œåˆ‡æ¢å­èœå•
+                if(Ps2KeyValue >= KeyValue_1 && Ps2KeyValue <= KeyValue_4)
+                {
+                    // æ ¹æ®æŒ‰é”®å€¼(1~4)åˆ‡æ¢åˆ°å¯¹åº”å­èœå•
+                    Change_Menu((uint8_t)(Ps2KeyValue - KeyValue_0));
+                }
+                break;
+
+            case 1:  // å®æ—¶æµ‹é‡ç•Œé¢
+                MenuHandler_Measure();
+                break;
+
+            case 2:  // è·ç¦»æ ¡å‡†ç•Œé¢
+                MenuHandler_Calibrate();
+                break;
+
+            case 3:  // ç³»ç»ŸçŠ¶æ€æŸ¥çœ‹ç•Œé¢
+                MenuHandler_Status();
+                break;
+
+            case 4:  // PGAç¨‹æ§å¢ç›Š/PWMæµ‹è¯•ç•Œé¢
+                MenuHandler_PGA_Test();
+                break;
+
+            default: // å¼‚å¸¸çŠ¶æ€å…œåº•ï¼šçŠ¶æ€è·‘é£å¼ºåˆ¶åˆ‡å›ä¸»èœå•
+                g_menu_sign = 0;
+                break;
+        }
+        delay_ms(10);  // çŸ­æš‚å»¶æ—¶ï¼Œé™ä½CPUå ç”¨ã€æ¶ˆæŠ–ã€é˜²ç©ºè½¬
+    }
+}
+
+/************************* ç³»ç»Ÿåˆå§‹åŒ–å‡½æ•° *************************/
+/**
+ * @brief æ•´ä½“ç¡¬ä»¶åˆå§‹åŒ–ï¼šLCDã€PWMã€å®šæ—¶ã€å¤–éƒ¨ä¸­æ–­ã€æ ¡å‡†æ•°æ®åŠ è½½
+ */
+static void Init_All(void)
+{
+    LCD_Clear(Black);                  // å…¨å±æ¸…å±ä¸ºé»‘è‰²èƒŒæ™¯
+    Ultrasonic_PWM_Init();             // åˆå§‹åŒ–40kHzå‘å°„PWMæ³¢å½¢é©±åŠ¨ (äº’è¡¥PWMï¼Œé©±åŠ¨è¶…å£°æ³¢æ¢å¤´)
+    Ultrasonic_Timer_Init();           // åˆå§‹åŒ–TIM5å¾®ç§’çº§é«˜ç²¾åº¦è®¡æ—¶å™¨
+    Ultrasonic_Echo_Init();            // åˆå§‹åŒ–å›æ³¢æ¥æ”¶å¤–éƒ¨ä¸­æ–­ (PC0åŒè¾¹æ²¿è§¦å‘)
+    Calibration_Load();                // ä»Flashè¯»å–å†å²æ ¡å‡†æ•°æ®åˆ°RAM
+
+    Ultrasonic_ApplyGain(PGA112_DEFAULT_GAIN_CODE); // è®¾ç½®PGAé»˜è®¤å¢ç›Šæ¡£ä½
+    g_gain_settle_discard = 0;                     // æ¸…é™¤å¢ç›Šç¨³å®šä¸¢å¼ƒæ ‡å¿—
+}
+
+/************************* ä¸»ç•Œé¢æ˜¾ç¤ºå‡½æ•° *************************/
+/**
+ * @brief ç»˜åˆ¶ä¸»èœå•å›ºå®šUIï¼šæ ‡é¢˜ã€åˆ†å‰²çº¿ã€ç‰ˆæœ¬ã€èœå•é€‰é¡¹
+ */
+static void Disp_Main(void)
+{
+    uint8_t count;
+
+    // é¡¶éƒ¨æ ‡é¢˜å±…ä¸­æ˜¾ç¤º
+    OS_String_Show(272, 16, 32, 1, TITLE_STR);
+
+    // ç»˜åˆ¶æ¨ªç«–ç™½è‰²åˆ†å‰²çº¿ï¼Œåˆ’åˆ†ç•Œé¢åŒºåŸŸ (é¡¶éƒ¨çº¿ã€åº•éƒ¨çº¿ã€å·¦å³åˆ†éš”çº¿)
+    LCD_Appoint_Clear(0, 64, 800, 72, White);    // é¡¶éƒ¨æ¨ªå‘åˆ†å‰²çº¿
+    LCD_Appoint_Clear(0, 440, 800, 448, White);  // åº•éƒ¨æ¨ªå‘åˆ†å‰²çº¿
+    LCD_Appoint_Clear(250, 72, 252, 440, White); // å·¦å³åŒºåŸŸçºµå‘åˆ†å‰²çº¿
+
+    // åº•éƒ¨çŠ¶æ€æ ï¼šç¡¬ä»¶å‹å· + è½¯ä»¶ç‰ˆæœ¬
+    OS_String_Show(32, 456, 16, 1, MODEL_VER_STR); 
+    OS_String_Show(680, 456, 16, 1, USER_VER_STR); 
+
+    // åˆå§‹åŒ–èœå•é€‰é¡¹å‰ç¼€ä¸º "-" (æœªé€‰ä¸­æ ‡è®°)
+    for(count = 1; count <= MENU_CHOICE_NUM; count++)
+    {
+        OS_String_Show(32, (uint16_t)(32 + 64 * count), 32, 1, "-");
+    }
+
+    // ç»˜åˆ¶å·¦ä¾§4ä¸ªèœå•æ–‡å­—
+    OS_String_Show(60, 96, 32, 1, MENU1_CHOICE1);
+    OS_String_Show(60, 160, 32, 1, MENU1_CHOICE2);
+    OS_String_Show(60, 224, 32, 1, MENU1_CHOICE3);
+    OS_String_Show(60, 288, 32, 1, MENU1_CHOICE4);
+}
+
+/**
+ * @brief èœå•åˆ‡æ¢é€»è¾‘ï¼šæ›´æ–°é€‰ä¸­ç®­å¤´ã€åˆ·æ–°çŠ¶æ€æœºã€æ¸…é™¤æŒ‰é”®äº‹ä»¶
+ * @param menu_sign ç›®æ ‡èœå•ç¼–å· (1~4)
+ */
+static void Change_Menu(uint8_t menu_sign)
+{
+    uint8_t count;
+
+    // å…ˆæ¸…ç©ºæ‰€æœ‰èœå•é¡¹å‰é¢çš„é€‰ä¸­æ ‡è®°
+    for(count = 1; count <= MENU_CHOICE_NUM; count++)
+    {
+        OS_String_Show(32, (uint16_t)(32 + 64 * count), 32, 1, "-");
+    }
+
+    // ç»˜åˆ¶æ–°é€‰ä¸­èœå•ç®­å¤´ ">"ï¼Œå¹¶æ›´æ–°çŠ¶æ€æœºå˜é‡
+    if(menu_sign >= 1 && menu_sign <= MENU_CHOICE_NUM)
+    {
+        OS_String_Show(32, (uint16_t)(32 + 64 * menu_sign), 32, 1, ">");
+        g_menu_sign = menu_sign;
+    }
+    else
+    {
+        g_menu_sign = 0;  // éæ³•æŒ‰é”®ï¼Œåˆ‡å›ä¸»èœå•
+        Clear_Work_Area();// æ¸…ç©ºå³ä¾§å·¥ä½œåŒº
+    }
+
+    Ps2KeyValue = KeyValue_Null;  // æ¶ˆè´¹æœ¬æ¬¡æŒ‰é”®ï¼Œé˜²æ­¢é‡å¤è§¦å‘
+}
+
+/************************* UIå·¥å…·å‡½æ•° *************************/
+/**
+ * @brief æ¸…ç©ºå³ä¾§å·¥ä½œåŒºåŸŸ (è°ƒç”¨å…·ä½“æ¸…æ–‡æœ¬å‡½æ•°)
+ */
+static void Clear_Work_Area(void) { Clear_Work_Text(); }
+
+/**
+ * @brief ç”¨ç©ºç™½å­—ç¬¦ä¸²å±€éƒ¨æ¸…å±ï¼Œæ•ˆç‡é«˜äºå…¨å±€LCD_Clearï¼Œé¿å…é—ªçƒ
+ * @note æ ¹æ®ç•Œé¢å¸ƒå±€ï¼Œåˆ†åˆ«æ¸…ç©ºæ ‡é¢˜åŒºã€9è¡Œä¿¡æ¯åŒºã€åº•éƒ¨ä¸¤è¡Œæç¤ºåŒº
+ */
+static void Clear_Work_Text(void)
+{
+    uint8_t line;
+    // æ ‡é¢˜åŒºæ¸…å± (32å·å­—ä½“ï¼Œä¸€è¡Œ)
+    OS_String_Show(280, 88, 32, 1, UI_BLANK_TEXT_32);
+    // ä¸­é—´å¤šè¡Œæ–‡æœ¬åŒºæ¸…å± (24å·å­—ä½“ï¼Œå…±9è¡Œ)
+    for(line = 0; line < 9U; line++) 
+    { 
+        OS_String_Show(280, (uint16_t)(150 + line * 30), 24, 1, UI_BLANK_TEXT_24); 
+    }
+    // åº•éƒ¨æç¤ºè¡Œæ¸…å± (16å·å­—ä½“ï¼Œä¸¤è¡Œ)
+    OS_String_Show(280, 400, 16, 1, UI_BLANK_TEXT_16);
+    OS_String_Show(280, 420, 16, 1, UI_BLANK_TEXT_16);
+}
+
+/**
+ * @brief ç»˜åˆ¶å³ä¾§å·¥ä½œåŒºå¤§æ ‡é¢˜
+ * @param title æ ‡é¢˜å­—ç¬¦ä¸²
+ */
+static void Draw_Work_Title(char *title) { OS_String_Show(280, 88, 32, 1, title); }
+
+/**
+ * @brief ç»˜åˆ¶åº•éƒ¨æŒ‰é”®æ“ä½œæç¤º (ä¸¤è¡Œ)
+ * @param tip1 æç¤ºæ–‡å­—1 (é€šå¸¸å·¦ä¾§æŒ‰é”®åŠŸèƒ½)
+ * @param tip2 æç¤ºæ–‡å­—2 (é€šå¸¸å³ä¾§æŒ‰é”®åŠŸèƒ½)
+ */
+static void Draw_Key_Tips(char *tip1, char *tip2) 
+{ 
+    OS_String_Show(280, 400, 16, 1, tip1); 
+    OS_String_Show(280, 420, 16, 1, tip2); 
+}
+
+/**
+ * @brief æŒ‰è¡Œç»˜åˆ¶çº¯æ–‡æœ¬ (æ ‡ç­¾åŒº)
+ * @param line è¡Œå· (0èµ·å§‹)
+ * @param text æ˜¾ç¤ºæ–‡æœ¬
+ */
+static void Show_Text_Line(uint16_t line, char *text) 
+{ 
+    uint16_t y = (uint16_t)(150 + line * 30); 
+    OS_String_Show(280, y, 24, 1, text); 
+}
+
+/**
+ * @brief ç»˜åˆ¶"æ ‡ç­¾: æ•°å€¼"ç»„åˆè¡Œ
+ * @param line è¡Œå·
+ * @param label æ ‡ç­¾æ–‡å­—
+ * @param value å¾…æ˜¾ç¤ºæ•°å€¼
+ * @param format æ ¼å¼åŒ–å­—ç¬¦ä¸² (å¦‚ "%06.1f")
+ */
+static void Show_Value_Line(uint16_t line, char *label, double value, char *format) 
+{ 
+    char temp[24]; 
+    uint16_t y = (uint16_t)(150 + line * 30); 
+    sprintf(temp, format, value); 
+    OS_String_Show(280, y, 24, 1, label); 
+    OS_String_Show(500, y, 24, 1, temp); 
+}
+
+/**
+ * @brief ä»…ç»˜åˆ¶å³ä¾§æ•°å€¼åŒºåŸŸ (ä¸å¸¦æ ‡ç­¾)
+ * @param line è¡Œå·
+ * @param value æ•°å€¼
+ * @param format æ ¼å¼åŒ–ä¸²
+ */
+static void Show_Value_Only(uint16_t line, double value, char *format) 
+{ 
+    char temp[24]; 
+    uint16_t y = (uint16_t)(150 + line * 30); 
+    sprintf(temp, format, value); 
+    OS_String_Show(500, y, 24, 1, temp); 
+}
+
+/**
+ * @brief å³ä¾§æ•°å€¼åŒºæ˜¾ç¤ºçº¯æ–‡æœ¬ (å­—ç¬¦ä¸²)
+ * @param line è¡Œå·
+ * @param text æ–‡æœ¬
+ */
+static void Show_Text_Value_Only(uint16_t line, char *text) 
+{ 
+    uint16_t y = (uint16_t)(150 + line * 30); 
+    OS_String_Show(500, y, 24, 1, text); 
+}
+
+/**
+ * @brief ç­‰å¾…æŒ‰é”®æ¾å¼€ï¼Œç®€å•æŒ‰é”®æ¶ˆæŠ–+é˜²æ­¢é•¿æŒ‰è¿å‘
+ * @param key_value éœ€è¦ç­‰å¾…é‡Šæ”¾çš„æŒ‰é”®å€¼ (å¦‚KeyValue_Enter)
+ */
+static void Wait_Ps2KeyRelease(uint8_t key_value)
+{
+    do
+    {
+        Ps2KeyValue = KeyValue_Null; // æ¸…ç©ºæŒ‰é”®å€¼
+        delay_ms(30);                // ç­‰å¾…30ms
+    } while(Ps2KeyValue == key_value); // ç›´åˆ°æŒ‰é”®è¢«é‡Šæ”¾
+}
+
+/************************* è¶…å£°æ³¢ç¡¬ä»¶é©±åŠ¨æ ¸å¿ƒå±‚ *************************/
+/**
+ * @brief TIM5å®šæ—¶å™¨åˆå§‹åŒ–ï¼šå¾®ç§’çº§é«˜ç²¾åº¦è®¡æ—¶
+ * @note é€‰ç”¨TIM5åŸå› ï¼šSTM32F4 32ä½é€šç”¨å®šæ—¶å™¨ï¼Œè®¡æ•°èŒƒå›´0~4294967295ï¼Œè¿œè·ç¦»æµ‹è·ä¸ä¼šæº¢å‡º
+ *       APB1æ—¶é’Ÿ = 84MHzï¼Œé¢„åˆ†é¢‘84-1ï¼Œå®šæ—¶å™¨è®¡æ•°é¢‘ç‡ = 1MHz â†’ 1è®¡æ•°å€¼ = 1Î¼s
+ */
+static void Ultrasonic_Timer_Init(void)
+{
+    TIM_TimeBaseInitTypeDef tim_base;
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM5, ENABLE);  // ä½¿èƒ½TIM5æ—¶é’Ÿ
+    TIM_TimeBaseStructInit(&tim_base);
+
+    tim_base.TIM_Prescaler = 84 - 1;                      // é¢„åˆ†é¢‘ 84åˆ†é¢‘ â†’ 1MHz
+    tim_base.TIM_CounterMode = TIM_CounterMode_Up;       // å‘ä¸Šè®¡æ•°
+    tim_base.TIM_Period = 0xFFFFFFFFU;                   // æœ€å¤§è‡ªåŠ¨é‡è½½å€¼ï¼Œè¶…é•¿è®¡æ—¶ä¸æº¢å‡º
+    tim_base.TIM_ClockDivision = TIM_CKD_DIV1;            // ä¸åˆ†é¢‘
+
+    TIM_TimeBaseInit(TIM5, &tim_base);
+    TIM_Cmd(TIM5, ENABLE);  // å®šæ—¶å™¨æŒç»­å¼€å¯ï¼Œå…¨ç¨‹ä½œä¸ºå¾®ç§’è®¡æ—¶å™¨
+}
+
+/**
+ * @brief å›æ³¢å¼•è„š + å¤–éƒ¨ä¸­æ–­åˆå§‹åŒ–
+ * @note å¼•è„šï¼šPC0 æµ®ç©ºè¾“å…¥
+ *       ä¸­æ–­ï¼šEXTI0 åŒè¾¹æ²¿è§¦å‘(ä¸Šå‡æ²¿+ä¸‹é™æ²¿)ï¼Œç”¨äºæ•è·å®Œæ•´å›æ³¢è„‰å†²å®½åº¦
+ *       åŒè¾¹æ²¿è§¦å‘åŸå› ï¼šéœ€è¦åŒæ—¶è·å¾—ä¸Šå‡æ²¿å’Œä¸‹é™æ²¿æ—¶é—´ï¼Œæ‰èƒ½è®¡ç®—è„‰å†²ä¸­å¿ƒ(æ³¢å³°)
+ */
+static void Ultrasonic_Echo_Init(void)
+{
+    GPIO_InitTypeDef gpio_init;
+    EXTI_InitTypeDef exti_init;
+    NVIC_InitTypeDef nvic_init;
+
+    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOC, ENABLE);    // ä½¿èƒ½GPIOCæ—¶é’Ÿ
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_SYSCFG, ENABLE);  // ä½¿èƒ½SYSCFG(å¤–éƒ¨ä¸­æ–­æ˜ å°„)
+
+    // PC0 é…ç½®ä¸ºæµ®ç©ºè¾“å…¥ (ç”±å¤–éƒ¨è¶…å£°æ³¢æ¨¡å—é©±åŠ¨)
+    GPIO_StructInit(&gpio_init);
+    gpio_init.GPIO_Pin = GPIO_Pin_0;
+    gpio_init.GPIO_Mode = GPIO_Mode_IN;
+    gpio_init.GPIO_PuPd = GPIO_PuPd_NOPULL;
+    GPIO_Init(GPIOC, &gpio_init);
+
+    // å°†PC0å¼•è„šæ˜ å°„åˆ°EXTI0ä¸­æ–­çº¿
+    SYSCFG_EXTILineConfig(EXTI_PortSourceGPIOC, EXTI_PinSource0);
+
+    // å¤–éƒ¨ä¸­æ–­é…ç½®ï¼šåŒè¾¹æ²¿è§¦å‘
+    EXTI_StructInit(&exti_init);
+    exti_init.EXTI_Line = EXTI_Line0;
+    exti_init.EXTI_Mode = EXTI_Mode_Interrupt;
+    exti_init.EXTI_Trigger = EXTI_Trigger_Rising_Falling;  // ä¸Šå‡æ²¿+ä¸‹é™æ²¿éƒ½è§¦å‘
+    exti_init.EXTI_LineCmd = ENABLE;
+    EXTI_Init(&exti_init);
+    EXTI_ClearITPendingBit(EXTI_Line0); // æ¸…é™¤åˆå§‹ä¸­æ–­æ ‡å¿—
+
+    // NVICä¸­æ–­ä¼˜å…ˆçº§é…ç½®ï¼šä¼˜å…ˆçº§è¾ƒé«˜ï¼Œé¿å…ä¸­æ–­å»¶è¿Ÿå¼•å…¥å¾®ç§’çº§è¯¯å·®
+    nvic_init.NVIC_IRQChannel = EXTI0_IRQn;
+    nvic_init.NVIC_IRQChannelPreemptionPriority = 2;
+    nvic_init.NVIC_IRQChannelSubPriority = 1;        
+    nvic_init.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&nvic_init);
+}
+
+/**
+ * @brief è®¾ç½®PGA112ç¨‹æ§æ”¾å¤§å™¨å¢ç›Šæ¡£ä½
+ * @param gain_code å¢ç›Šç¼–ç (0~7)ï¼Œå¯¹åº” 1,2,4,8,16,32,64,128å€
+ * @note åˆ‡æ¢å¢ç›Šåè®¾ç½® g_gain_settle_discard æ ‡å¿—ï¼Œä¸¢å¼ƒé¦–æ¬¡æµ‹é‡å€¼ç­‰å¾…ç”µè·¯ç¨³å®š
+ */
+static void Ultrasonic_ApplyGain(uint8_t gain_code)
+{
+    gain_code &= 0x07U;  // æ©ç é™åˆ¶èŒƒå›´ï¼Œé˜²æ­¢éæ³•ç¼–ç 
+    if(gain_code != g_ultrasonic_gain_code)
+    {
+        PGA112_SetGainCode(gain_code);               // ç¡¬ä»¶è®¾ç½®å¢ç›Š (é€šè¿‡SPI)
+        g_ultrasonic_gain_code = gain_code;
+        g_gain_settle_discard = 1;                   // æ ‡è®°ï¼šå¢ç›Šåˆ‡æ¢åç”µè·¯éœ‡è¡ï¼Œä¸¢å¼ƒé¦–æ¬¡æµ‹é‡å€¼
+    }
+}
+
+/**
+ * @brief æ ¹æ®å†å²å›æ³¢æ—¶é—´(è·ç¦»)è‡ªé€‚åº”é€‰æ‹©å¢ç›Šæ¡£ä½
+ * @note åŸç†ï¼šè¶…å£°æ³¢è¿œè·ç¦»ä¿¡å·è¡°å‡ä¸¥é‡ï¼Œè·ç¦»è¶Šè¿œï¼Œæ‰€éœ€æ”¾å¤§å€æ•°è¶Šå¤§
+ *       ä¾æ®ç»éªŒé˜ˆå€¼åˆ’åˆ†8æ¡£ï¼Œä¿è¯å›æ³¢ä¿¡å·å¹…åº¦é€‚ä¸­
+ * @param echo_us å†å²å›æ³¢æ—¶é—´ (Î¼s)
+ * @return PGAå¢ç›Šç¼–ç  (0~7)
+ */
+static uint8_t Ultrasonic_SelectGainCode(uint32_t echo_us)
+{
+    if(echo_us < 180U)       return PGA112_GAIN_1;    // æè¿‘ï¼šä¸æ”¾å¤§
+    if(echo_us < 360U)       return PGA112_GAIN_2;    
+    if(echo_us < 800U)       return PGA112_GAIN_4;    
+    if(echo_us < 1800U)      return PGA112_GAIN_8;    
+    if(echo_us < 3600U)      return PGA112_GAIN_16;   // ä¸­è¿œè·ç¦»å¼€å§‹æ”¾å¤§
+    if(echo_us < 6500U)      return PGA112_GAIN_32;   
+    if(echo_us < 9500U)      return PGA112_GAIN_64;   
+    return PGA112_GAIN_128;                           // æé™è·ç¦»ï¼šæœ€å¤§128å€æ”¾å¤§
+}
+
+/**
+ * @brief è®¡ç®—å›æ³¢è„‰å†²ä¸­å¿ƒç‚¹(æ³¢å³°)æ—¶é—´
+ * @note åŸç†ï¼šè¶…å£°æ³¢å›æ³¢ç»æ£€æ³¢åè¾“å‡ºä¸ºæ–¹æ³¢ï¼Œä¿¡å·èƒ½é‡å³°å€¼å‡ºç°åœ¨æ–¹æ³¢ä¸­å¿ƒ
+ *       ä½¿ç”¨ä¸­å¿ƒæ—¶åˆ»ä»£æ›¿è¾¹æ²¿ï¼Œå¯ä»¥æé«˜æµ‹è·ç²¾åº¦ï¼Œå‡å°è„‰å®½å¸¦æ¥çš„è¯¯å·®
+ * @param rise_us ä¸Šå‡æ²¿æ—¶é—´ (Î¼s)
+ * @param fall_us ä¸‹é™æ²¿æ—¶é—´ (Î¼s)
+ * @return æ³¢å³°å¯¹åº”å¾®ç§’æ—¶é—´
+ */
+static uint32_t Ultrasonic_EstimatePeakTime(uint32_t rise_us, uint32_t fall_us)
+{
+    uint32_t width;
+    // å¼‚å¸¸ä¿æŠ¤ï¼šä¸‹é™æ²¿å°äºä¸Šå‡æ²¿(è®¡æ•°å™¨æº¢å‡º/å¹²æ‰°)ï¼Œç›´æ¥è¿”å›ä¸Šå‡æ²¿
+    if(fall_us <= rise_us)
+    {
+        return rise_us;
+    }
+    width = fall_us - rise_us;
+    return rise_us + width / 2U; // å–è„‰å†²ä¸­å¿ƒ
+}
+
+/**
+ * @brief è‡ªé€‚åº”å¢ç›Šå‡†å¤‡ï¼šæµ‹é‡å¤±è´¥æ—¶é€çº§æŠ¬å‡å¢ç›Š
+ * @param retry_count å¤±è´¥é‡è¯•æ¬¡æ•° (0~3)
+ * @note åŸºäºä¸Šä¸€æ¬¡æœ‰æ•ˆå›æ³¢æ—¶é—´é€‰æ‹©åŸºç¡€å¢ç›Šï¼Œè‹¥è¿ç»­å¤±è´¥åˆ™é¢å¤–å¢åŠ å¢ç›Šæ¡£ä½
+ */
+static void Ultrasonic_PrepareGain(uint8_t retry_count)
+{
+    // åŸºäºä¸Šä¸€æ¬¡æœ‰æ•ˆè·ç¦»é€‰æ‹©åŸºç¡€å¢ç›Š
+    uint8_t gain_code = Ultrasonic_SelectGainCode(g_last_echo_us);
+
+    // è¿ç»­æµ‹é‡å¤±è´¥ï¼Œé€çº§å¢åŠ å¢ç›Š (æ¯æ¬¡å¤±è´¥æå‡ä¸€æ¡£)
+    if(retry_count > ULTRASONIC_GAIN_RETRY_MAX)
+    {
+        retry_count = ULTRASONIC_GAIN_RETRY_MAX;
+    }
+    gain_code = (uint8_t)(gain_code + retry_count);
+
+    if(gain_code > PGA112_GAIN_128)
+    {
+        gain_code = PGA112_GAIN_128; // é™åˆ¶æœ€å¤§å¢ç›Š
+    }
+    Ultrasonic_ApplyGain(gain_code);
+    delay_us(20); // ç­‰å¾…SPIé…ç½®+è¿æ”¾ç”µè·¯ç¨³å®š (çº¦20Î¼s)
+}
+
+/**
+ * @brief è®¾ç½®å›æ³¢æœ‰æ•ˆæ¥æ”¶æ—¶é—´çª—å£ï¼Œè¿‡æ»¤çª—å£å¤–å¹²æ‰°ä¿¡å·
+ * @param min_us çª—å£ä¸‹é™ (Î¼s)
+ * @param max_us çª—å£ä¸Šé™ (Î¼s)
+ * @note è‹¥å‚æ•°æ— æ•ˆåˆ™æ¢å¤å…¨èŒƒå›´çª—å£
+ */
+static void Ultrasonic_SetAcceptWindow(uint32_t min_us, uint32_t max_us)
+{
+    if(max_us <= min_us)
+    {
+        min_us = 0;
+        max_us = ULTRASONIC_TIMEOUT_US;
+    }
+    g_echo_accept_min_us = min_us;
+    g_echo_accept_max_us = max_us;
+}
+
+/**
+ * @brief åŠ¨æ€è®¾ç½®è·Ÿè¸ªçª—å£ï¼šé”å®šç›®æ ‡åç¼©å°çª—å£ã€ä¸¢å¤±ç›®æ ‡åå…¨åŸŸæœç´¢
+ * @note è·Ÿè¸ªçª—å£åˆ©ç”¨ç›®æ ‡ç©ºé—´ç›¸å…³æ€§ï¼Œåœ¨å†å²å€¼é™„è¿‘å¼€çª„çª—å£ï¼Œæé«˜æŠ—å¹²æ‰°èƒ½åŠ›
+ *       è‹¥è¿ç»­ä¸¢å¤±ç›®æ ‡åˆ™æ‰©å¤§çª—å£é‡æ–°æ•è·
+ */
+static void Ultrasonic_SetTrackingWindow(void)
+{
+    const uint32_t margin_us = ULTRASONIC_TRACK_MARGIN_US;
+    if(g_reacquire_ignore_near != 0U)
+    {
+        // é‡æœç´¢æ¨¡å¼ï¼šå±è”½è¿‘è·ç¦» (é¿å¼€ç›²åŒº)ï¼Œä»æœ€å°æœ‰æ•ˆè¿œè·ç¦»å¼€å§‹æœç´¢
+        Ultrasonic_SetAcceptWindow(ULTRASONIC_REACQUIRE_MIN_US, ULTRASONIC_TIMEOUT_US);
+    }
+    else if(g_tracking_valid == 0U)
+    {
+        // æœªé”å®šç›®æ ‡ï¼šå…¨å¼€çª—å£ï¼Œå…¨åŸŸæœç´¢
+        Ultrasonic_SetAcceptWindow(0, ULTRASONIC_TIMEOUT_US);
+    }
+    else if(g_last_echo_us > margin_us)
+    {
+        // å·²é”å®šä¸”å†å²å€¼å¤§äºä½™é‡ï¼šä»¥å†å²å€¼ä¸ºä¸­å¿ƒï¼Œå·¦å³æ‰©å±•ä½™é‡ï¼Œçª„çª—å£è·Ÿè¸ª
+        Ultrasonic_SetAcceptWindow(g_last_echo_us - margin_us, g_last_echo_us + margin_us);
+    }
+    else
+    {
+        // è¿‘è·ç¦»ç›®æ ‡ï¼šä¸‹é™è®¾ä¸ºç›²åŒº (é¿å…è‡ªæ¿€)ï¼Œä¸Šé™ä¸ºå†å²å€¼+ä½™é‡
+        Ultrasonic_SetAcceptWindow(ULTRASONIC_BLANKING_US, g_last_echo_us + margin_us);
+    }
+}
+
+/**
+ * @brief å•æ¬¡è¶…å£°æ³¢å‘å°„+å›æ³¢æ•è· (ç‰©ç†å±‚)
+ * @param echo_us è¾“å‡ºï¼šæœ¬æ¬¡å›æ³¢æ—¶é—´ (Î¼s)
+ * @return 1=æ•è·æˆåŠŸ 0=è¶…æ—¶å¤±è´¥
+ * @note é˜»å¡è½®è¯¢ç­‰å¾…å›æ³¢ï¼Œè¶…æ—¶æ—¶é—´ ULTRASONIC_TIMEOUT_US
+ */
+static uint8_t Ultrasonic_MeasureOnce(uint32_t *echo_us)
+{
+    uint32_t timeout;
+    // 1. å¤ä½æ‰€æœ‰ä¸­æ–­çŠ¶æ€æ ‡å¿—
+    g_echo_captured = 0;
+    g_measure_active = 1;
+    g_echo_time_us = 0;
+    g_echo_rise_us = 0;
+    g_echo_fall_us = 0;
+    g_echo_rise_seen = 0;
+
+    // 2. æ¸…ç©ºå®šæ—¶å™¨è®¡æ•°å€¼ + æ¸…é™¤ä¸­æ–­æŒ‚èµ· (ç¡®ä¿ä»0å¼€å§‹è®¡æ—¶)
+    TIM_SetCounter(TIM5, 0);
+    EXTI_ClearITPendingBit(EXTI_Line0);
+
+    // 3. é©±åŠ¨æ¢å¤´å‘å°„ä¸€ç»„40kHzè¶…å£°æ³¢è„‰å†²ä¸² (é€šå¸¸8ä¸ªè„‰å†²)
+    Ultrasonic_FireBurst();
+
+    // 4. é˜»å¡è½®è¯¢ç­‰å¾…å›æ³¢ï¼Œè¶…æ—¶åˆ™é€€å‡º
+    for(timeout = 0; timeout < ULTRASONIC_TIMEOUT_US / 10U; timeout++)
+    {
+        if(g_echo_captured != 0U)
+        {
+            *echo_us = g_echo_time_us;
+            g_measure_active = 0; // å…³é—­æµ‹é‡çª—å£
+            return 1;
+        }
+        delay_us(10);
+    }
+
+    // è¶…æ—¶å¤±è´¥
+    g_measure_active = 0;
+    return 0;
+}
+
+/**
+ * @brief å¸¦å¤šçº§æ»¤æ³¢çš„æ‰¹é‡æµ‹é‡ï¼šé‡‡æ ·+å¢ç›Šè‡ªé€‚åº”+èšç±»é™å™ª
+ * @param echo_us è¾“å‡ºæœ€ç»ˆæœ‰æ•ˆå›æ³¢æ—¶é—´ (Î¼s)
+ * @return 1=é‡‡æ ·æˆåŠŸ 0=å…¨éƒ¨å¤±è´¥
+ * @note ç®—æ³•æµç¨‹ï¼š
+ *       1. è‡ªé€‚åº”å¢ç›Šè°ƒæ•´
+ *       2. è¿ç»­é‡‡é›† ULTRASONIC_FILTER_SAMPLES ä¸ªæœ‰æ•ˆæ ·æœ¬
+ *       3. æ’å…¥æ’åº
+ *       4. å¯»æ‰¾æœ€å¯†é›†æ ·æœ¬ç°‡ (å®¹å¿ Â±90Î¼s æ³¢åŠ¨)
+ *       5. å–ç°‡ä¸­ä½æ•°ä½œä¸ºæœ€ç»ˆç»“æœ
+ */
+static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us)
+{
+    uint32_t samples[ULTRASONIC_FILTER_SAMPLES]; // é‡‡æ ·ç¼“å†²åŒº
+    uint8_t valid_count = 0;                     // æœ‰æ•ˆæ ·æœ¬è®¡æ•°
+    uint8_t attempts = 0;                        // æ€»å‘å°„æ¬¡æ•° (é˜²æ­¢æ— é™å¾ªç¯)
+    uint8_t gain_retry = 0;                      // å¢ç›Šé‡è¯•è®¡æ•°
+    uint8_t miss_count = 0;                      // è¿ç»­ä¸¢å¤±å›æ³¢è®¡æ•°
+    uint8_t index;
+    uint32_t reacquire_min_us = ULTRASONIC_REACQUIRE_MIN_US;
+
+    // æ ¡å‡†æ•°æ®æœ‰æ•ˆæ—¶ï¼Œä½¿ç”¨ç¬¬ä¸€æ ¡å‡†ç‚¹æ—¶é—´ä½œä¸ºé‡æœç´¢ä¸‹é™ (æ›´ç²¾ç¡®)
+    if((g_calib_valid != 0U) && (g_calib.point_us[0] > reacquire_min_us))
+    {
+        reacquire_min_us = g_calib.point_us[0];
+    }
+
+    // å¾ªç¯é‡‡é›†ï¼Œå‡‘å¤ŸæŒ‡å®šæ•°é‡æœ‰æ•ˆæ ·æœ¬ï¼Œæœ€å¤šå…è®¸é¢å¤–20æ¬¡å‘å°„æœºä¼š
+    while(attempts < (ULTRASONIC_FILTER_SAMPLES + 20U) && valid_count < ULTRASONIC_FILTER_SAMPLES)
+    {
+        uint32_t sample = 0;
+        Ultrasonic_PrepareGain(gain_retry); // åŠ¨æ€é…ç½®å¢ç›Š (æ ¹æ®ä¸Šæ¬¡ç»“æœå’Œå¤±è´¥æ¬¡æ•°)
+        attempts++;
+
+        if(Ultrasonic_MeasureOnce(&sample) != 0U)
+        {
+            // å¢ç›Šåˆšåˆ‡æ¢ï¼Œç”µè·¯æœªç¨³å®šï¼Œä¸¢å¼ƒè„æ•°æ®
+            if(g_gain_settle_discard != 0U)
+            {
+                g_gain_settle_discard = 0;
+                delay_ms(8);
+                continue;
+            }
+            // é‡æœç´¢æ¨¡å¼ä¸‹å±è”½è¿‘è·ç¦»å¹²æ‰° (é¿å¼€ç›²åŒº)
+            if((g_reacquire_ignore_near != 0U) && (sample < reacquire_min_us))
+            {
+                continue;
+            }
+            // å­˜å…¥æœ‰æ•ˆæ ·æœ¬
+            samples[valid_count++] = sample;
+            g_last_echo_us = sample;         // æ›´æ–°å†å²å€¼
+            gain_retry = 0;                  // æˆåŠŸåˆ™æ¸…é™¤é‡è¯•è®¡æ•°
+            miss_count = 0;
+            g_reacquire_ignore_near = 0U;    // æˆåŠŸæ•è·åé€€å‡ºé‡æœç´¢æ¨¡å¼
+        }
+        else
+        {
+            // å•æ¬¡æµ‹é‡å¤±è´¥å¤„ç†
+            if(g_gain_settle_discard != 0U)
+            {
+                g_gain_settle_discard = 0;
+            }
+            else
+            {
+                // æœªè¶…é™åˆ™æå‡å¢ç›Šé‡è¯• (é€çº§å¢åŠ )
+                if(gain_retry < ULTRASONIC_GAIN_RETRY_MAX)
+                {
+                    gain_retry++;
+                }
+                // è¿ç»­ä¸¢å¤±å›æ³¢ï¼Œåˆ¤å®šç›®æ ‡ä¸¢å¤±ï¼Œè¿›å…¥å…¨åŸŸé‡æœç´¢
+                if(g_tracking_valid != 0U)
+                {
+                    miss_count++;
+                    if(miss_count >= ULTRASONIC_REACQUIRE_MISSES)
+                    {
+                        // é‡ç½®æ‰€æœ‰çŠ¶æ€ï¼Œæ‰©å¤§æœç´¢çª—å£
+                        valid_count = 0U;
+                        miss_count = 0U;
+                        g_tracking_valid = 0U;
+                        g_reacquire_ignore_near = 1U;
+                        g_last_echo_us = ULTRASONIC_TIMEOUT_US;
+                        gain_retry = ULTRASONIC_GAIN_RETRY_MAX;
+                        Ultrasonic_SetAcceptWindow(reacquire_min_us, ULTRASONIC_TIMEOUT_US);
+                    }
+                }
+            }
+        }
+        delay_ms(8); // é™ä½å‘å°„å ç©ºæ¯”ï¼Œé˜²æ­¢å£°æ³¢å åŠ å½¢æˆé©»æ³¢å¹²æ‰°
+    }
+
+    if(valid_count == 0U)
+    {
+        return 0; // æ— æœ‰æ•ˆæ ·æœ¬ï¼Œæµ‹é‡å¤±è´¥
+    }
+
+    // æ ·æœ¬æ’åº (å‡åº)
+    Sort_Samples(samples, valid_count);
+
+    // èšç±»ç®—æ³•ï¼šé€‰å–æœ€å¯†é›†æ ·æœ¬ç°‡çš„ä¸­é—´å€¼ä½œä¸ºæœ€ç»ˆç»“æœï¼Œå‰”é™¤è·³å˜å¹²æ‰°
+    if(valid_count >= 3U)
+    {
+        uint8_t best_start = 0U;
+        uint8_t best_count = 1U;
+        uint8_t best_mid;
+        for(index = 0U; index < valid_count; index++)
+        {
+            uint8_t count = 1U;
+            uint8_t scan;
+            for(scan = (uint8_t)(index + 1U); scan < valid_count; scan++)
+            {
+                if((samples[scan] - samples[index]) <= ULTRASONIC_CLUSTER_SPAN_US)
+                {
+                    count++;
+                }
+                else
+                {
+                    break;
+                }
+            }
+            if(count > best_count)
+            {
+                best_count = count;
+                best_start = index;
+            }
+        }
+        best_mid = (uint8_t)(best_start + best_count / 2U);
+        *echo_us = samples[best_mid];
+    }
+    else
+    {
+        // æ ·æœ¬è¾ƒå°‘ï¼Œç›´æ¥å–ä¸­é—´å€¼
+        *echo_us = samples[valid_count / 2U];
+    }
+
+    g_last_echo_us = *echo_us;
+    return 1;
+}
+
+/**
+ * @brief æ’å…¥æ’åºï¼šå¯¹é‡‡æ ·æ•°ç»„å‡åºæ’åˆ—ï¼Œç”¨äºåç»­èšç±»ã€å»æå€¼
+ * @param data å¾…æ’åºæ•°ç»„
+ * @param length æ•°ç»„é•¿åº¦
+ */
+static void Sort_Samples(uint32_t *data, uint8_t length)
+{
+    uint8_t i;
+    for(i = 1U; i < length; i++)
+    {
+        uint32_t key = data[i];
+        int8_t j = (int8_t)i - 1;
+        // å‘å‰ç§»ä½ï¼Œæ‰¾åˆ°æ’å…¥ä½ç½®
+        while(j >= 0 && data[j] > key)
+        {
+            data[j + 1] = data[j];
+            j--;
+        }
+        data[j + 1] = key;
+    }
+}
+
+/************************* æ ¡å‡†ä¸è·ç¦»è½¬æ¢æ•°æ®å±‚ *************************/
+/**
+ * @brief ä»FlashæŒ‡å®šåœ°å€è¯»å–æ ¡å‡†æ•°æ®åˆ°RAM
+ * @note ç›´æ¥æŒ‡é’ˆå¼ºåˆ¶è½¬æ¢è¯»å–ï¼Œä¸ç»è¿‡ç¼“å­˜ï¼Œè¯»å–åè‡ªåŠ¨æ ¡éªŒåˆæ³•æ€§
+ */
+static void Calibration_Load(void)
+{
+    // åœ°å€å¼ºåˆ¶è½¬ä¸ºç»“æ„ä½“æŒ‡é’ˆï¼Œç›´æ¥è¯»å–Flashæ•°æ®
+    const UltrasonicCalibData *stored = (const UltrasonicCalibData *)ULTRASONIC_FLASH_ADDR;
+    g_calib = *stored; 
+    g_calib_valid = Calibration_IsValid(&g_calib); // æ ¡éªŒæ•°æ®åˆæ³•æ€§
+}
+
+/**
+ * @brief æ ¡éªŒæ ¡å‡†æ•°æ®æ˜¯å¦åˆæ³•ï¼šé­”æ•°ã€ç‰ˆæœ¬ã€æ—¶åºé€»è¾‘æ ¡éªŒ
+ * @param calib å¾…æ ¡éªŒç»“æ„ä½“
+ * @return 1=åˆæ³• 0=éæ³•
+ */
+static uint8_t Calibration_IsValid(const UltrasonicCalibData *calib)
+{
+    uint8_t index;
+    // 1. é­”æ•°+ç‰ˆæœ¬æ ¡éªŒ (é˜²æ­¢è¯»å–åˆ°éšæœºFlashå†…å®¹)
+    if(calib->magic != ULTRASONIC_FLASH_MAGIC || calib->version != ULTRASONIC_FLASH_VERSION)
+    {
+        return 0;
+    }
+    // 2. ç‰©ç†é€»è¾‘æ ¡éªŒï¼šè·ç¦»è¶Šè¿œï¼Œå›æ³¢æ—¶é—´å¿…é¡»å•è°ƒé€’å¢ï¼Œä¸”ä¸è¶…è¿‡æœ€å¤§é‡ç¨‹
+    for(index = 0; index < 5U; index++)
+    {
+        if(calib->point_us[index] == 0U || calib->point_us[index] > ULTRASONIC_TIMEOUT_US)
+        {
+            return 0; // æ—¶é—´è¶…å‡ºåˆæ³•èŒƒå›´
+        }
+        if(index > 0U && calib->point_us[index] <= calib->point_us[index - 1U])
+        {
+            return 0; // éå•è°ƒé€’å¢ (ç‰©ç†ä¸Šä¸å¯èƒ½)
+        }
+    }
+    return 1;  
+}
+
+/**
+ * @brief å°†æ ¡å‡†æ•°æ®å†™å…¥Flash Sector11
+ * @param calib å¾…å†™å…¥æ ¡å‡†ç»“æ„ä½“
+ * @return 1=å†™å…¥æˆåŠŸ 0=å¤±è´¥
+ * @note Flashç‰¹æ€§ï¼šåªèƒ½æ“¦é™¤(å†™å…¥1)å’Œç¼–ç¨‹(å†™å…¥0)ï¼Œä¸èƒ½å•ç‹¬æ”¹å†™å­—èŠ‚ï¼›æ“¦é™¤æŒ‰æ‰‡åŒºæ“ä½œ
+ *       Sector11å¤§å°ä¸º128KBï¼Œåœ°å€èŒƒå›´ 0x080E0000 - 0x080FFFFF
+ */
+static uint8_t Calibration_Save(const UltrasonicCalibData *calib)
+{
+    FLASH_Status status = FLASH_COMPLETE;
+    const uint32_t *words = (const uint32_t *)calib; 
+    uint32_t address = ULTRASONIC_FLASH_ADDR;
+    uint32_t index;
+
+    FLASH_Unlock(); // è§£é”Flashå†™ä¿æŠ¤
+    // æ¸…é™¤Flashé”™è¯¯æ ‡å¿— (ä¸ºä¸Šä¸€æ­¥å¯èƒ½çš„é”™è¯¯æ¸…ç†)
+    FLASH_ClearFlag(FLASH_FLAG_EOP | FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR |
+                    FLASH_FLAG_PGAERR | FLASH_FLAG_PGPERR | FLASH_FLAG_PGSERR);
+
+    // æ•´æ‰‡åŒºæ“¦é™¤ (æ‰€æœ‰ä½å˜ä¸º1)
+    status = FLASH_EraseSector(FLASH_Sector_11, VoltageRange_3);
+    if(status == FLASH_COMPLETE)
+    {
+        // æŒ‰32bitå­—é€å­—å†™å…¥ (ç»“æ„ä½“å¤§å°32å­—èŠ‚ï¼Œå…±8ä¸ªå­—)
+        for(index = 0; index < (sizeof(UltrasonicCalibData) / 4U); index++)
+        {
+            status = FLASH_ProgramWord(address, words[index]);
+            if(status != FLASH_COMPLETE)
+            {
+                break; 
+            }
+            address += 4U;
+        }
+    }
+    FLASH_Lock(); // é‡æ–°ä¸Šé”ä¿æŠ¤Flash
+
+    return (uint8_t)(status == FLASH_COMPLETE); 
+}
+
+/**
+ * @brief æ ¡å‡†æ—¶æ ¹æ®æ ‡å‡†è·ç¦»è®¾ç½®ä¸“å±æ¥æ”¶çª—å£ï¼Œæé«˜æ ‡å®šç²¾åº¦
+ * @param distance_mm å½“å‰æ ‡å®šæ ‡å‡†è·ç¦» (mm)
+ * @note é€šè¿‡é™åˆ¶çª—å£èŒƒå›´ï¼Œé¿å…æ ¡å‡†æ—¶é‡‡é›†åˆ°å¤šå¾„å¹²æ‰°æˆ–é‚»è¿‘ç‰©ä½“å›æ³¢
+ */
+static void Calibration_SetMeasureWindow(uint16_t distance_mm)
+{
+    switch(distance_mm)
+    {
+        case 100U:
+            Ultrasonic_SetAcceptWindow(ULTRASONIC_BLANKING_US, 1800U);
+            break;
+        case 300U:
+            Ultrasonic_SetAcceptWindow(1200U, 3200U);
+            break;
+        case 600U:
+            Ultrasonic_SetAcceptWindow(3000U, 5600U);
+            break;
+        case 900U:
+            Ultrasonic_SetAcceptWindow(5000U, 7800U);
+            break;
+        case 1300U:
+            Ultrasonic_SetAcceptWindow(7400U, ULTRASONIC_TIMEOUT_US);
+            break;
+        default:
+            Ultrasonic_SetAcceptWindow(0, ULTRASONIC_TIMEOUT_US);
+            break;
+    }
+}
+
+/**
+ * @brief æ— æ ¡å‡†æ•°æ®æ—¶ï¼Œä½¿ç”¨ç†æƒ³ç‰©ç†å…¬å¼è®¡ç®—è·ç¦» (å›é€€æ–¹æ¡ˆ)
+ * @param echo_us å›æ³¢æ—¶é—´(Î¼s)
+ * @return è®¡ç®—è·ç¦»(mm)
+ * @note ç†è®ºå…¬å¼ï¼šè·ç¦»(mm) = æ—¶é—´(Î¼s) * 0.1715
+ *       å®é™…ä½¿ç”¨ 0.164866 ç³»æ•°æ˜¯ä¸ºäº†é€‚é…HC-SR04æ¨¡å—çš„å¸¸è§åå·®
+ */
+static float Convert_Time_To_Distance_Default(uint32_t echo_us)
+{
+    float distance = (float)echo_us * 0.164866f;
+    // é™å¹…åˆ°é‡ç¨‹èŒƒå›´ 10mm ~ 1300mm
+    if(distance < 10.0f) distance = 10.0f;
+    if(distance > 1300.0f) distance = 1300.0f;
+    return distance;
+}
+
+/**
+ * @brief åˆ†æ®µçº¿æ€§æ’å€¼è·ç¦»æ¢ç®— (ä½¿ç”¨æ ¡å‡†æ•°æ®ï¼Œä¿®æ­£ç³»ç»Ÿè¯¯å·®)
+ * @param echo_us å›æ³¢æ—¶é—´(Î¼s)
+ * @return ä¿®æ­£åè·ç¦»(mm)
+ * @note åŸç†ï¼šå°†å…¨é‡ç¨‹åˆ†ä¸ºå¤šæ®µç›´çº¿ï¼Œç”¨æ ‡å®šç‚¹æ‹Ÿåˆéçº¿æ€§è¯¯å·®
+ *       ä¾‹å¦‚ï¼šä½¿ç”¨5ä¸ªæ ‡å®šç‚¹ï¼Œåˆ†æˆ4æ®µç›´çº¿ï¼Œä¸¤ç‚¹å¼æ’å€¼
+ */
+static float Convert_Time_To_Distance(uint32_t echo_us)
+{
+    uint8_t index;
+    float x0, x1;  // æ¨ªåæ ‡ï¼šå®é™…æµ‹é‡å›æ³¢æ—¶é—´ (Î¼s)
+    float y0, y1;  // çºµåæ ‡ï¼šæ ‡å‡†ç‰©ç†è·ç¦» (mm)
+    float distance;
+
+    if(g_calib_valid == 0U)
+    {
+        return Convert_Time_To_Distance_Default(echo_us); // æ— æ ¡å‡†åˆ™ç”¨ç†æƒ³å…¬å¼
+    }
+
+    // æ ¹æ®å›æ³¢æ—¶é—´åˆ¤æ–­è½åœ¨å“ªä¸€æ®µæŠ˜çº¿åŒºé—´å†…
+    index = 0U;
+    while((index < 3U) && (echo_us > g_calib.point_us[index + 1U]))
+    {
+        index++;
+    }
+
+    x0 = (float)g_calib.point_us[index];
+    x1 = (float)g_calib.point_us[index + 1U];
+    y0 = (float)k_calib_distance_mm[index];
+    y1 = (float)k_calib_distance_mm[index + 1U];
+
+    if(x1 <= x0) // é˜²é™¤é›¶ä¿æŠ¤
+    {
+        return Convert_Time_To_Distance_Default(echo_us);
+    }
+
+    // ä¸¤ç‚¹å¼ç›´çº¿æ’å€¼: y = y0 + (x - x0)*(y1 - y0)/(x1 - x0)
+    distance = y0 + ((float)echo_us - x0) * (y1 - y0) / (x1 - x0);
+
+    // é™å¹…åˆ°æœ‰æ•ˆé‡ç¨‹
+    if(distance < (float)k_calib_distance_mm[0]) distance = (float)k_calib_distance_mm[0];
+    if(distance > 1300.0f) distance = 1300.0f;
+    return distance;
+}
+
+/************************* èœå•é€»è¾‘äº¤äº’å±‚ *************************/
+/**
+ * @brief å®æ—¶æµ‹é‡ç•Œé¢ä¸šåŠ¡é€»è¾‘
+ * @note å¾ªç¯è°ƒç”¨æ»¤æ³¢æµ‹è·å‡½æ•°ï¼Œå®æ—¶æ˜¾ç¤ºæ—¶é—´ã€è·ç¦»ã€æ ¡å‡†çŠ¶æ€ã€å¢ç›Šç­‰
+ *       æŒ‰è¿”å›é”®é€€å‡ºåˆ°ä¸»èœå•
+ */
+static void MenuHandler_Measure(void)
+{
+    char value_text[24];
+    Draw_Work_Title("æµ‹é‡æ¨¡å¼");
+    Draw_Key_Tips("ç¡®è®¤å¼€å§‹æµ‹é‡", "è¿”å›é€€å‡ºæµ‹é‡");
+
+    g_tracking_valid = 0;
+    g_reacquire_ignore_near = 0U;
+
+    // å›ºå®šæ–‡æœ¬ç»˜åˆ¶ (æ ‡ç­¾)
+    OS_String_Show(280, 150, 24, 1, "æµ‹é‡æ—¶é—´(us)");
+    OS_String_Show(280, 180, 24, 1, "æµ‹é‡è·ç¦»(mm)");
+    OS_String_Show(280, 210, 24, 1, "é»˜è®¤è·ç¦»(mm)");
+    OS_String_Show(280, 240, 24, 1, "æ ¡å‡†çŠ¶æ€");
+    OS_String_Show(280, 270, 24, 1, "å‰ç«¯å¢ç›Š(x)");
+    OS_String_Show(280, 300, 24, 1, "æç¤ºä¿¡æ¯");
+
+    Show_Text_Value_Only(3, "æœªæ ¡å‡†");
+    Show_Text_Value_Only(4, "008");
+    Show_Text_Value_Only(5, "ç­‰å¾…å¼€å§‹");
+
+    // å¾ªç¯æµ‹é‡ï¼Œç›´åˆ°æŒ‰ä¸‹è¿”å›é”®
+    while(Ps2KeyValue != KeyValue_Back)
+    {
+        uint32_t echo_us = 0;
+        Ultrasonic_SetTrackingWindow(); // æ ¹æ®è·Ÿè¸ªçŠ¶æ€è®¾ç½®æ¥æ”¶çª—å£
+
+        if(Ultrasonic_MeasureFiltered(&echo_us) != 0U)
+        {
+            float distance = Convert_Time_To_Distance(echo_us);
+            g_tracking_valid = 1; // æµ‹è·æˆåŠŸï¼Œæ ‡è®°è·Ÿè¸ªæœ‰æ•ˆ
+
+            sprintf(value_text, "%05lu", (unsigned long)echo_us);
+            Show_Text_Value_Only(0, value_text);
+
+            sprintf(value_text, "%06.1f", (double)distance);
+            Show_Text_Value_Only(1, value_text);
+
+            sprintf(value_text, "%06.1f", (double)Convert_Time_To_Distance_Default(echo_us));
+            Show_Text_Value_Only(2, value_text);
+
+            Show_Text_Value_Only(3, (g_calib_valid != 0U) ? "å·²æ ¡å‡†" : "æœªæ ¡å‡†");
+            sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
+            Show_Text_Value_Only(4, value_text);
+            Show_Text_Value_Only(5, "æµ‹é‡æ­£å¸¸");
+        }
+        else
+        {
+            // æµ‹é‡å¤±è´¥ï¼šè¿›å…¥é‡æœç´¢æ¨¡å¼
+            g_reacquire_ignore_near = 1U;
+            g_tracking_valid = 0;
+            Show_Text_Value_Only(3, "æµ‹é‡å¤±è´¥");
+            sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
+            Show_Text_Value_Only(4, value_text);
+            Show_Text_Value_Only(5, "æ£€æŸ¥æ¢å¤´");
+        }
+        delay_ms(120); // 120ms æµ‹é‡å‘¨æœŸ
+    }
+
+    Ps2KeyValue = KeyValue_Null;
+    Change_Menu(0); // è¿”å›ä¸»èœå•
+}
+
+/**
+ * @brief è¶…å£°æ³¢æ ¡å‡†èœå•å¤„ç†å‡½æ•°
+ * @details åˆ†æ­¥å®Œæˆ5ä¸ªæ ‡å‡†è·ç¦»ç‚¹é‡‡æ ·ã€åˆæ³•æ€§æ ¡éªŒã€Flashä¿å­˜æ ¡å‡†æ•°æ®
+ *          æ”¯æŒæŒ‰é”®ç¡®è®¤é‡‡æ ·ã€è¿”å›é”®é€€å‡ºæ ¡å‡†æµç¨‹
+ * @note æ ¡å‡†æ­¥éª¤ï¼š
+ *       1. åœ¨æŒ‡å®šè·ç¦»æ”¾ç½®åå°„æ¿ (ä¾æ¬¡ 100,300,600,900,1300mm)
+ *       2. æŒ‰ç¡®è®¤é”®è¿›è¡Œè‡ªåŠ¨é‡‡æ ·
+ *       3. å®Œæˆå…¨éƒ¨5ç‚¹åè‡ªåŠ¨æ ¡éªŒå¹¶ä¿å­˜è‡³Flash
+ */
+static void MenuHandler_Calibrate(void)
+{
+    UltrasonicCalibData new_calib;
+    uint8_t step = 0;
+    uint8_t last_step = 0xFFU;
+    char line[24];
+
+    // åˆå§‹åŒ–æ ¡å‡†æ•°æ®ç»“æ„ (å†™å…¥é­”æ•°ã€ç‰ˆæœ¬ï¼Œæ¸…ç©ºæ—¶é—´ç‚¹)
+    new_calib.magic = ULTRASONIC_FLASH_MAGIC;
+    new_calib.version = ULTRASONIC_FLASH_VERSION;
+    new_calib.point_us[0] = 0; new_calib.point_us[1] = 0;
+    new_calib.point_us[2] = 0; new_calib.point_us[3] = 0;
+    new_calib.point_us[4] = 0; new_calib.reserved[0] = 0;
+
+    Draw_Work_Title("è·ç¦»æ ¡å‡†");
+    Draw_Key_Tips("ç¡®è®¤å¼€å§‹æ ¡å‡†", "è¿”å›é€€å‡ºæ ¡å‡†");
+    OS_String_Show(280, 150, 24, 1, "æ ¡å‡†æç¤º");
+    OS_String_Show(280, 180, 24, 1, "å½“å‰çŠ¶æ€");
+    OS_String_Show(280, 210, 24, 1, "100mm(us)");
+    OS_String_Show(280, 240, 24, 1, "300mm(us)");
+    OS_String_Show(280, 270, 24, 1, "600mm(us)");
+    OS_String_Show(280, 300, 24, 1, "900mm(us)");
+    OS_String_Show(280, 330, 24, 1, "1300mm(us)");
+    OS_String_Show(280, 360, 24, 1, "å½“å‰æµ‹å€¼(us)");
+    OS_String_Show(280, 390, 24, 1, "æ ¡å‡†ç»“æœ");
+    Show_Text_Value_Only(1, "ç­‰å¾…æ ¡å‡†");
+    Show_Text_Value_Only(2, "00000"); Show_Text_Value_Only(3, "00000");
+    Show_Text_Value_Only(4, "00000"); Show_Text_Value_Only(5, "00000");
+    Show_Text_Value_Only(6, "00000"); Show_Text_Value_Only(7, "00000");
+    Show_Text_Value_Only(8, "ç­‰å¾…æ ¡å‡†");
+
+    while(Ps2KeyValue != KeyValue_Back)
+    {
+        if(step != last_step)
+        {
+            sprintf(line, "å¯¹å‡†%04umm", k_calib_distance_mm[step]);
+            Show_Text_Value_Only(0, line);
+            last_step = step;
+        }
+
+        if(Ps2KeyValue == KeyValue_Enter)
+        {
+            uint32_t echo_us = 0;
+            Ps2KeyValue = KeyValue_Null;
+
+            Show_Text_Value_Only(0, "å¼€å§‹æ ¡å‡†");
+            Show_Text_Value_Only(1, "æ­£åœ¨æ ¡å‡†");
+            Calibration_SetMeasureWindow(k_calib_distance_mm[step]); // è®¾ç½®çª—å£
+            if(Ultrasonic_MeasureFiltered(&echo_us) != 0U)
+            {
+                new_calib.point_us[step] = echo_us;
+                sprintf(line, "%05lu", (unsigned long)echo_us);
+                Show_Text_Value_Only(7, line);
+                Show_Text_Value_Only((uint16_t)(2 + step), line);
+                Show_Text_Value_Only(1, "é‡‡æ ·å®Œæˆ");
+                step++;
+
+                if(step >= 5U) // 5ä¸ªç‚¹å…¨éƒ¨å®Œæˆ
+                {
+                    uint8_t valid_ok = Calibration_IsValid(&new_calib);
+                    uint8_t save_ok = 0U;
+
+                    if(valid_ok != 0U)
+                    {
+                        save_ok = Calibration_Save(&new_calib);
+                    }
+
+                    if(valid_ok != 0U && save_ok != 0U)
+                    {
+                        g_calib = new_calib;
+                        g_calib_valid = 1;
+                        Show_Text_Value_Only(8, "æ ¡å‡†å®Œæˆ  ");
+                    }
+                    else if(valid_ok == 0U)
+                    {
+                        Show_Text_Value_Only(1, "æ£€æŸ¥ç‚¹ä½");
+                        Show_Text_Value_Only(8, "POINT ERR ");
+                    }
+                    else
+                    {
+                        Show_Text_Value_Only(1, "å†™å…¥å¤±è´¥");
+                        Show_Text_Value_Only(8, "FLASH ERR ");
+                    }
+                    delay_ms(1000);
+                    break;
+                }
+            }
+            else
+            {
+                Show_Text_Value_Only(1, "æ ¡å‡†è¶…æ—¶");
+                Show_Text_Value_Only(8, "æ ¡å‡†å¤±è´¥");
+            }
+            Show_Text_Value_Only(8, "æ¾å¼€ç¡®è®¤é”®");
+            Wait_Ps2KeyRelease(KeyValue_Enter);
+        }
+        delay_ms(20);
+    }
+
+    Ps2KeyValue = KeyValue_Null;
+    Ultrasonic_SetAcceptWindow(0, ULTRASONIC_TIMEOUT_US);
+    Change_Menu(0);
+}
+
+/**
+ * @brief ç³»ç»ŸçŠ¶æ€æŸ¥çœ‹èœå•å¤„ç†å‡½æ•°
+ * @details å±•ç¤ºæ ¡å‡†æœ‰æ•ˆæ€§ã€5ä¸ªæ ¡å‡†ç‚¹åŸå§‹uså€¼ã€å½“å‰å¢ç›Š
+ *          æ”¯æŒæŒ‰ä¸‹ç¡®è®¤é”®è¿›è¡Œä¸€æ¬¡å®æ—¶æµ‹é‡å¹¶æ˜¾ç¤ºç»“æœ
+ */
+static void MenuHandler_Status(void)
+{
+    char value_text[24];
+
+    Draw_Work_Title("ç³»ç»ŸçŠ¶æ€");
+    Draw_Key_Tips("ç¡®è®¤æŸ¥çœ‹æµ‹é‡", "è¿”å›é€€å‡ºæŸ¥çœ‹");
+    Ultrasonic_SetAcceptWindow(0, ULTRASONIC_TIMEOUT_US);
+    OS_String_Show(280, 150, 24, 1, "æ ¡å‡†çŠ¶æ€");
+    OS_String_Show(280, 180, 24, 1, "100mm(us)");
+    OS_String_Show(280, 210, 24, 1, "300mm(us)");
+    OS_String_Show(280, 240, 24, 1, "600mm(us)");
+    OS_String_Show(280, 270, 24, 1, "900mm(us)");
+    OS_String_Show(280, 300, 24, 1, "1300mm(us)");
+    OS_String_Show(280, 330, 24, 1, "å½“å‰å¢ç›Š(x)");
+    OS_String_Show(280, 360, 24, 1, "å®æ—¶æµ‹é‡æ—¶é—´(us)");
+    OS_String_Show(280, 390, 24, 1, "å®æ—¶æµ‹é‡è·ç¦»(mm)");
+
+    Show_Text_Value_Only(0, (g_calib_valid != 0U) ? "æ ¡å‡†æœ‰æ•ˆ" : "æ•°æ®æ— æ•ˆ");
+    sprintf(value_text, "%05lu", (unsigned long)g_calib.point_us[0]); Show_Text_Value_Only(1, value_text);
+    sprintf(value_text, "%05lu", (unsigned long)g_calib.point_us[1]); Show_Text_Value_Only(2, value_text);
+    sprintf(value_text, "%05lu", (unsigned long)g_calib.point_us[2]); Show_Text_Value_Only(3, value_text);
+    sprintf(value_text, "%05lu", (unsigned long)g_calib.point_us[3]); Show_Text_Value_Only(4, value_text);
+    sprintf(value_text, "%05lu", (unsigned long)g_calib.point_us[4]); Show_Text_Value_Only(5, value_text);
+    sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code)); Show_Text_Value_Only(6, value_text);
+    Show_Text_Value_Only(7, "00000");
+    Show_Text_Value_Only(8, "0000.0");
+
+    while(Ps2KeyValue != KeyValue_Back)
+    {
+        if(Ps2KeyValue == KeyValue_Enter)
+        {
+            uint32_t echo_us = 0;
+            Ps2KeyValue = KeyValue_Null;
+            if(Ultrasonic_MeasureFiltered(&echo_us) != 0U)
+            {
+                sprintf(value_text, "%05lu", (unsigned long)echo_us);
+                Show_Text_Value_Only(7, value_text);
+                sprintf(value_text, "%06.1f", (double)Convert_Time_To_Distance(echo_us));
+                Show_Text_Value_Only(8, value_text);
+            }
+            else
+            {
+                Show_Text_Value_Only(7, "æµ‹é‡å¤±è´¥");
+                Show_Text_Value_Only(8, "0000.0");
+            }
+        }
+        delay_ms(20);
+    }
+
+    Ps2KeyValue = KeyValue_Null;
+    Change_Menu(0);
+}
+
+/**
+ * @brief PGA112ç¨‹æ§å¢ç›Šæµ‹è¯•èœå•
+ * @details å¼€å¯è¶…å£°æ³¢PWMå‘å°„ (40kHz äº’è¡¥PWM)ï¼Œé€šè¿‡åŠ å‡æŒ‰é”®åˆ‡æ¢PGA112å¢ç›Šæ¡£ä½(1~128å€)
+ *          æŒ‰ä¸‹è¿”å›é”®å…³é—­PWMå¹¶é€€å‡ºå½“å‰èœå•ï¼Œæ–¹ä¾¿è°ƒè¯•å‰ç«¯ç”µè·¯ã€‚
+ */
+static void MenuHandler_PGA_Test(void)
+{
+    uint8_t gain_index = 3U;  // é»˜è®¤å¢ç›Šç´¢å¼•ï¼Œå¯¹åº”8å€å¢ç›Š
+
+    // PGA112 8æ¡£å¢ç›Šé…ç½®ç ï¼š1/2/4/8/16/32/64/128å€
+    const uint8_t gain_codes[8] =
+    {
+        PGA112_GAIN_1, PGA112_GAIN_2, PGA112_GAIN_4, PGA112_GAIN_8,
+        PGA112_GAIN_16, PGA112_GAIN_32, PGA112_GAIN_64, PGA112_GAIN_128
+    };
+
+    char value_text[24];  // å­—ç¬¦ä¸²ç¼“å­˜
+
+    Ultrasonic_PWM_OutputEnable();                     // å¼€å¯è¶…å£°æ³¢PWMè¾“å‡º
+    Ultrasonic_ApplyGain(gain_codes[gain_index]);      // åŠ è½½åˆå§‹å¢ç›Š
+
+    // ç•Œé¢æ ‡é¢˜ã€æŒ‰é”®æç¤ºã€å›ºå®šæ–‡æœ¬
+    Draw_Work_Title("ç¨‹æ§å¢ç›Šè°ƒèŠ‚");
+    Draw_Key_Tips("+/-è°ƒèŠ‚å¢ç›Š", "Backé€€å‡ºå¹¶å…³é—­PWM");
+    OS_String_Show(280, 150, 24, 1, "PWMè¾“å‡ºçŠ¶æ€");
+    OS_String_Show(280, 180, 24, 1, "è¾“å‡ºæ–¹å¼");
+    OS_String_Show(280, 210, 24, 1, "è¾“å‡ºé¢‘ç‡(Hz)");
+    OS_String_Show(280, 240, 24, 1, "è¾“å‡ºå ç©ºæ¯”(%)");
+    OS_String_Show(280, 270, 24, 1, "å½“å‰å¢ç›Š(x)");
+    OS_String_Show(280, 300, 24, 1, "å¢ç›Šæ¡£ä½");
+    OS_String_Show(280, 330, 24, 1, "æ³¢å½¢è¯´æ˜");
+    OS_String_Show(280, 360, 24, 1, "å½“å‰æç¤º");
+
+    // åˆå§‹åŒ–ç•Œé¢å›ºå®šå†…å®¹
+    Show_Text_Value_Only(0, "å¼€å¯");
+    Show_Text_Value_Only(1, "äº’è¡¥PWM");
+    Show_Text_Value_Only(2, "040000");
+    Show_Text_Value_Only(3, "050");
+    sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
+    Show_Text_Value_Only(4, value_text);
+    Show_Text_Value_Only(5, "1/2/4/8/16/32/64/128");
+    Show_Text_Value_Only(6, "PD12/PD13è¾“å‡º");
+    Show_Text_Value_Only(7, "ç­‰å¾…è°ƒèŠ‚");
+
+    // ä¸»å¾ªç¯ï¼šæŒ‰é”®è°ƒèŠ‚å¢ç›Šï¼Œè¿”å›é”®é€€å‡º
+    while(Ps2KeyValue != KeyValue_Back)
+    {
+        // å¢åŠ å¢ç›Š
+        if(Ps2KeyValue == KeyValue_Add)
+        {
+            Ps2KeyValue = KeyValue_Null;
+            if(gain_index < 7U) // æœªåˆ°æœ€å¤§æ¡£ä½
+            {
+                gain_index++;
+                Ultrasonic_ApplyGain(gain_codes[gain_index]); // è®¾ç½®æ–°å¢ç›Š
+                sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
+                Show_Text_Value_Only(4, value_text);
+                Show_Text_Value_Only(7, "å¢ç›Šå·²è°ƒå¤§");
+            }
+            else
+            {
+                Show_Text_Value_Only(7, "å·²åˆ°æœ€å¤§å¢ç›Š");
+            }
+        }
+        // å‡å°å¢ç›Š
+        else if(Ps2KeyValue == KeyValue_Minus)
+        {
+            Ps2KeyValue = KeyValue_Null;
+            if(gain_index > 0U) // æœªåˆ°æœ€å°æ¡£ä½
+            {
+                gain_index--;
+                Ultrasonic_ApplyGain(gain_codes[gain_index]); // è®¾ç½®æ–°å¢ç›Š
+                sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
+                Show_Text_Value_Only(4, value_text);
+                Show_Text_Value_Only(7, "å¢ç›Šå·²è°ƒå°");
+            }
+            else
+            {
+                Show_Text_Value_Only(7, "å·²åˆ°æœ€å°å¢ç›Š");
+            }
+        }
+        delay_ms(20);
+    }
+
+    Ultrasonic_PWM_OutputDisable();  // å…³é—­PWMè¾“å‡º
+    Ps2KeyValue = KeyValue_Null;     // æ¸…ç©ºæŒ‰é”®çŠ¶æ€
+    Change_Menu(0);                  // è¿”å›ä¸»èœå•
+}
+
+/************************* ä¸­æ–­æœåŠ¡å‡½æ•° *************************/
+
+/**
+ * @brief EXTI0 å¤–éƒ¨ä¸­æ–­æœåŠ¡å‡½æ•°
+ * @note å›æ³¢ä¿¡å·(PC0)è¾¹æ²¿è§¦å‘ä¸­æ–­ï¼Œé‡‡ç”¨**çŠ¶æ€æœº**æ•è·è¶…å£°æ³¢å›æ³¢æ—¶åº
+ * @æµç¨‹ ç›²åŒºè¿‡æ»¤ â†’ æ•è·ä¸Šå‡æ²¿ â†’ æ•è·ä¸‹é™æ²¿ â†’ æ ¡éªŒè„‰å†²æœ‰æ•ˆæ€§ â†’ æ ‡è®°é‡‡æ ·å®Œæˆ
+ * @attention è¯¥ä¸­æ–­ä¼˜å…ˆçº§è¾ƒé«˜ï¼Œåº”å°½å¿«å¤„ç†ï¼Œé¿å…é˜»å¡å…¶ä»–ä¸­æ–­
+ */
+void EXTI0_IRQHandler(void)
+{
+    // åˆ¤æ–­æ˜¯å¦ä¸º EXTI_Line0 ä¸­æ–­è§¦å‘
+    if(EXTI_GetITStatus(EXTI_Line0) != RESET)
+    {
+        // ä»…åœ¨æµ‹é‡çª—å£å¼€å¯æ—¶ï¼Œæ‰å“åº”å›æ³¢ä¿¡å·ï¼Œå±è”½æ‚æ³¢å¹²æ‰°
+        if(g_measure_active != 0U)
+        {
+            // è¯»å–TIM5è®¡æ•°å™¨å€¼(å¾®ç§’è®¡æ—¶)
+            uint32_t now = TIM_GetCounter(TIM5);
+
+            // é˜¶æ®µ1ï¼šè¿‡æ»¤å‘å°„è¿‘ç«¯ç›²åŒºï¼Œæ»¤é™¤å‘å°„è€¦åˆå¹²æ‰° (æ¢å¤´å‘å°„åçš„ä½™éœ‡æœŸ)
+            if(now >= ULTRASONIC_BLANKING_US)
+            {
+                // å¼•è„šä¸ºé«˜ç”µå¹³ï¼šåˆ¤å®šä¸ºã€ä¸Šå‡æ²¿ã€‘
+                if(GPIO_ReadInputDataBit(GPIOC, GPIO_Pin_0) != Bit_RESET)
+                {
+                    // æœªè®°å½•è¿‡ä¸Šå‡æ²¿ + åœ¨æœ‰æ•ˆæ—¶é—´çª—å£å†…ï¼Œè®°å½•ä¸Šå‡æ²¿æ—¶åˆ»
+                    if((g_echo_rise_seen == 0U) && (now >= g_echo_accept_min_us))
+                    {
+                        g_echo_rise_us = now;     // ä¿å­˜ä¸Šå‡æ²¿æ—¶é—´æˆ³
+                        g_echo_rise_seen = 1U;    // æ ‡è®°å·²æ•è·ä¸Šå‡æ²¿
+                    }
+                }
+                // å¼•è„šä¸ºä½ç”µå¹³ + å·²æ•è·ä¸Šå‡æ²¿ + æ—¶é—´åˆæ³•ï¼šåˆ¤å®šä¸ºã€ä¸‹é™æ²¿ã€‘
+                else if(g_echo_rise_seen != 0U && now > g_echo_rise_us)
+                {
+                    g_echo_fall_us = now;  // ä¿å­˜ä¸‹é™æ²¿æ—¶é—´æˆ³
+                    // è®¡ç®—å›æ³¢å³°å€¼ç­‰æ•ˆæ—¶é—´(ä¸­å¿ƒæ—¶åˆ»ç®—æ³•)
+                    g_echo_time_us = Ultrasonic_EstimatePeakTime(g_echo_rise_us, g_echo_fall_us);
+
+                    // å¤šé‡æœ‰æ•ˆæ€§æ ¡éªŒï¼šæ—¶é—´èŒƒå›´ã€è„‰å†²å®½åº¦ã€çª—å£èŒƒå›´ï¼Œæ»¤é™¤æ¯›åˆº/å¹²æ‰°
+                    if((g_echo_time_us >= ULTRASONIC_MIN_VALID_US) &&
+                       ((g_echo_fall_us - g_echo_rise_us) >= ULTRASONIC_MIN_PULSE_WIDTH_US) &&
+                       (g_echo_time_us >= g_echo_accept_min_us) &&
+                       (g_echo_time_us <= g_echo_accept_max_us))
+                    {
+                        g_echo_captured = 1U;    // æ ‡è®°é‡‡æ ·å®Œæˆï¼Œä¸»å¾ªç¯å¯å–æ•°
+                        g_measure_active = 0U;   // å…³é—­æœ¬æ¬¡æµ‹é‡çª—å£ï¼Œåœæ­¢æ¥æ”¶ä¸­æ–­
+                    }
+                    // æ ¡éªŒå¤±è´¥ï¼šæ¸…ç©ºçŠ¶æ€ï¼Œç­‰å¾…ä¸‹ä¸€æ¬¡å›æ³¢
+                    else
+                    {
+                        g_echo_rise_seen = 0U;
+                        g_echo_rise_us = 0U;
+                        g_echo_fall_us = 0U;
+                    }
+                }
+            }
+        }
+
+        // å¿…é¡»æ¸…é™¤ä¸­æ–­æŒ‚èµ·æ ‡å¿—ï¼Œå¦åˆ™ä¼šé‡å¤è¿›ä¸­æ–­
+        EXTI_ClearITPendingBit(EXTI_Line0);
+    }
+}
