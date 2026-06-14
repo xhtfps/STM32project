@@ -12,10 +12,11 @@
 
 // ×îĞ¡ÓĞĞ§»Ø²¨Ê±¼ä(Î¢Ãë)£º¹ıÂËÓÉÓÚÓ²¼şµçÂ·´®ÈÅ²úÉúµÄ¼«¶Ì¸ÉÈÅÃ«´Ì
 #define ULTRASONIC_MIN_VALID_US      20U
+#define ULTRASONIC_MIN_PULSE_WIDTH_US  30U
 
 // ½ÓÊÕÃ¤Çø/ÏûÒşÊ±¼ä(Î¢Ãë)£º·¢ÉäÌ½Í·ÔÚ·¢³öÉù²¨ºó»áÓĞÓàÕğ£¬½ÓÊÕµçÂ·ÔÚ¸Õ·¢ÉäÍêµÄÕâ¶ÎÊ±¼äÄÚ»áÊÕµ½Ç¿ÁÒµÄ×ÔÉí¸ÉÈÅ¡£
-// Éè¶¨220usÃ¤Çø£¬ÒâÎ¶×Å·ÅÆú²âÁ¿¼«ÆäÌù½üÌ½Í·µÄ¾àÀë£¨Ô¼ºÏ½ü¾àÃ¤Çø3.7cm£©£¬·ÀÖ¹×Ô¼¤ÎóÅĞ¡£
-#define ULTRASONIC_BLANKING_US       220U   
+// Éè¶¨450usÃ¤Çø£¬ÒâÎ¶×Å·ÅÆú²âÁ¿¼«ÆäÌù½üÌ½Í·µÄ¾àÀë£¨Ô¼ºÏ½ü¾àÃ¤Çø7.7cm£©£¬·ÀÖ¹×Ô¼¤ÎóÅĞ¡£
+#define ULTRASONIC_BLANKING_US       450U   
 
 // ÂË²¨²ÉÑù´ÎÊı£º¾ö¶¨ÁËµ¥´ÎÓĞĞ§²â¾àĞèÒª²É¼¯¶àÉÙ¸öÑù±¾¡£±ØĞëÅäºÏÈ¥¼«ÖµËã·¨Ê¹ÓÃ¡£
 #define ULTRASONIC_FILTER_SAMPLES    9U
@@ -76,6 +77,8 @@ static volatile uint32_t g_echo_time_us = 0;    // ×îÖÕ¼ÆËã³öµÄÓĞĞ§»Ø²¨·åÖµµ½´ïÊ
 static volatile uint32_t g_echo_rise_us = 0;    // ¼ÇÂ¼Âö³åÉÏÉıÑØµ½´ïµÄÊ±¿Ì
 static volatile uint32_t g_echo_fall_us = 0;    // ¼ÇÂ¼Âö³åÏÂ½µÑØµ½´ïµÄÊ±¿Ì
 static volatile uint8_t g_echo_rise_seen = 0;   // ×´Ì¬»ú±êÖ¾£ºÊÇ·ñÒÑ¾­¼ì²âµ½ÉÏÉıÑØ
+static volatile uint32_t g_echo_accept_min_us = 0;
+static volatile uint32_t g_echo_accept_max_us = ULTRASONIC_TIMEOUT_US;
 
 static uint8_t g_gain_settle_discard = 0;       // ÔË·ÅÔöÒæÇĞ»»ºó£¬Ó²¼şµçÂ·ĞèÒª½¨Á¢Ê±¼ä¡£´Ë±êÖ¾ÌáÊ¾¶ªÆúÇĞ»»ºóµÄÊ×´Î²âÁ¿¡£
 static uint32_t g_last_echo_us = 1500U;         // ±£´æÉÏÒ»´ÎÓĞĞ§²âÁ¿µÄ»Ø²¨Ê±¼ä¡£ÀûÓÃ¿Õ¼äÏà¹ØĞÔ£¬Ô¤²âÏÂÒ»´ÎËùĞèµÄÔöÒæ±¶Êı¡£
@@ -112,6 +115,7 @@ static void Ultrasonic_ApplyGain(uint8_t gain_code);
 static uint8_t Ultrasonic_SelectGainCode(uint32_t echo_us);
 static uint32_t Ultrasonic_EstimatePeakTime(uint32_t rise_us, uint32_t fall_us);
 static void Ultrasonic_PrepareGain(uint8_t retry_count);
+static void Ultrasonic_SetAcceptWindow(uint32_t min_us, uint32_t max_us);
 static uint8_t Ultrasonic_MeasureOnce(uint32_t *echo_us);
 static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us);
 static void Sort_Samples(uint32_t *data, uint8_t length);
@@ -120,6 +124,7 @@ static void Sort_Samples(uint32_t *data, uint8_t length);
 static void Calibration_Load(void);
 static uint8_t Calibration_IsValid(const UltrasonicCalibData *calib);
 static uint8_t Calibration_Save(const UltrasonicCalibData *calib);
+static void Calibration_SetMeasureWindow(uint16_t distance_mm);
 static float Convert_Time_To_Distance(uint32_t echo_us);
 static float Convert_Time_To_Distance_Default(uint32_t echo_us);
 
@@ -415,6 +420,19 @@ static void Ultrasonic_PrepareGain(uint8_t retry_count)
  * @brief ÎïÀí²ã£ºÖ´ĞĞµ¥´ÎÍêÕûµÄ³¬Éù²¨·¢ÉäÓë²¶»ñÁ÷³Ì
  * @return 1=²¶×½µ½»Ø²¨Âö³å£»0=³¬Ê±Î´¼ì²âµ½
  */
+static void Ultrasonic_SetAcceptWindow(uint32_t min_us, uint32_t max_us)
+{
+    if(max_us <= min_us)
+    {
+        min_us = 0;
+        max_us = ULTRASONIC_TIMEOUT_US;
+    }
+
+    g_echo_accept_min_us = min_us;
+    g_echo_accept_max_us = max_us;
+}
+
+
 static uint8_t Ultrasonic_MeasureOnce(uint32_t *echo_us)
 {
     uint32_t timeout;
@@ -641,10 +659,33 @@ static uint8_t Calibration_Save(const UltrasonicCalibData *calib)
 /**
  * @brief ÎŞĞ£×¼Êı¾İÊ±µÄÀíÏëÎïÀí¹«Ê½»ØÍË·½°¸
  */
+static void Calibration_SetMeasureWindow(uint16_t distance_mm)
+{
+    switch(distance_mm)
+    {
+        case 100U:
+            Ultrasonic_SetAcceptWindow(ULTRASONIC_BLANKING_US, 2200U);
+            break;
+        case 600U:
+            Ultrasonic_SetAcceptWindow(2200U, 5000U);
+            break;
+        case 900U:
+            Ultrasonic_SetAcceptWindow(5000U, 7400U);
+            break;
+        case 1300U:
+            Ultrasonic_SetAcceptWindow(7400U, ULTRASONIC_TIMEOUT_US);
+            break;
+        default:
+            Ultrasonic_SetAcceptWindow(0, ULTRASONIC_TIMEOUT_US);
+            break;
+    }
+}
+
+
 static float Convert_Time_To_Distance_Default(uint32_t echo_us)
 {
     // ÀíÏë¹«Ê½£º¾àÀë(mm) = Ê±¼ä(us) * 0.1715
-    float distance = (float)echo_us * 0.1715f;
+    float distance = (float)echo_us * 0.1486f;
 
     // Êä³öÏŞ·ùÂË²¨Æ÷£ºÇ¯ÖÆÔÚÓ²¼şºÏÀíÁ¿³ÌÇø¼ä
     if(distance < 10.0f) distance = 10.0f;
@@ -711,6 +752,7 @@ static void MenuHandler_Measure(void)
 
     Draw_Work_Title("²âÁ¿Ä£Ê½");
     Draw_Key_Tips("È·ÈÏ¿ªÊ¼²âÁ¿", "·µ»ØÍË³ö²âÁ¿");
+    Ultrasonic_SetAcceptWindow(0, ULTRASONIC_TIMEOUT_US);
     OS_String_Show(280, 150, 24, 1, "²âÁ¿Ê±¼ä(us)");
     OS_String_Show(280, 180, 24, 1, "²âÁ¿¾àÀë(mm)");
     OS_String_Show(280, 210, 24, 1, "Ä¬ÈÏ¾àÀë(mm)");
@@ -798,6 +840,7 @@ static void MenuHandler_Calibrate(void)
 
             Show_Text_Value_Only(0, "¿ªÊ¼Ğ£×¼");
             Show_Text_Value_Only(1, "ÕıÔÚĞ£×¼");
+            Calibration_SetMeasureWindow(k_calib_distance_mm[step]);
             if(Ultrasonic_MeasureFiltered(&echo_us) != 0U)
             {
                 
@@ -811,15 +854,29 @@ static void MenuHandler_Calibrate(void)
                 // ²É¼¯Íê4¸ö±ê¶¨µãºó£¬´¥·¢Ğ´ÈëFlashÂß¼­
                 if(step >= 4U) 
                 {
-                    if(Calibration_IsValid(&new_calib) != 0U && Calibration_Save(&new_calib) != 0U)
+                    uint8_t valid_ok = Calibration_IsValid(&new_calib);
+                    uint8_t save_ok = 0U;
+
+                    if(valid_ok != 0U)
+                    {
+                        save_ok = Calibration_Save(&new_calib);
+                    }
+
+                    if(valid_ok != 0U && save_ok != 0U)
                     {
                         g_calib = new_calib;
                         g_calib_valid = 1;
-                        Show_Text_Value_Only(7, "Ğ£×¼Íê³É");
+                        Show_Text_Value_Only(7, "Ğ£×¼Íê³É  ");
+                    }
+                    else if(valid_ok == 0U)
+                    {
+                        Show_Text_Value_Only(1, "¼ì²éµãÎ»");
+                        Show_Text_Value_Only(7, "POINT ERR ");
                     }
                     else
                     {
-                        Show_Text_Value_Only(7, "Ğ£×¼Ê§°Ü");
+                        Show_Text_Value_Only(1, "Ğ´ÈëÊ§°Ü");
+                        Show_Text_Value_Only(7, "FLASH ERR ");
                     }
                     delay_ms(1000);
                     break;
@@ -837,6 +894,7 @@ static void MenuHandler_Calibrate(void)
     }
 
     Ps2KeyValue = KeyValue_Null;
+    Ultrasonic_SetAcceptWindow(0, ULTRASONIC_TIMEOUT_US);
     Change_Menu(0);
 }
 
@@ -846,6 +904,7 @@ static void MenuHandler_Status(void)
 
     Draw_Work_Title("ÏµÍ³×´Ì¬");
     Draw_Key_Tips("È·ÈÏ²é¿´²âÁ¿", "·µ»ØÍË³ö²é¿´");
+    Ultrasonic_SetAcceptWindow(0, ULTRASONIC_TIMEOUT_US);
     OS_String_Show(280, 150, 24, 1, "Ğ£×¼×´Ì¬");
     OS_String_Show(280, 180, 24, 1, "Ğ£×¼µã1(us)");
     OS_String_Show(280, 210, 24, 1, "Ğ£×¼µã2(us)");
@@ -983,7 +1042,7 @@ void EXTI0_IRQHandler(void)
         {
             uint32_t now = TIM_GetCounter(TIM5); // »ñÈ¡´¥·¢Ë²¼äµÄÏµÍ³Î¢ÃëÊı
 
-            // ×´Ì¬»ú½×¶Î 1£º¹ıÂËÓ²¼ş·¢ÉäÊ±ÓÉÓÚ×ÔÉíñîºÏ²úÉúµÄ¼«½ü¾àÀëÇ¿»Ø²¨Ã¤Çø(ÀıÈç220us)
+            // ×´Ì¬»ú½×¶Î 1£º¹ıÂËÓ²¼ş·¢ÉäÊ±ÓÉÓÚ×ÔÉíñîºÏ²úÉúµÄ¼«½ü¾àÀëÇ¿»Ø²¨Ã¤Çø(ÀıÈç450us)
             if(now >= ULTRASONIC_BLANKING_US)
             {
                 // ¶ÁÈ¡Òı½Åµ±Ç°×´Ì¬£¬Èç¹ûÊÇ¸ßµçÆ½£¬ËµÃ÷±¾´ÎÊÇÉÏÉıÑØÖĞ¶Ï
@@ -1004,10 +1063,19 @@ void EXTI0_IRQHandler(void)
                     g_echo_time_us = Ultrasonic_EstimatePeakTime(g_echo_rise_us, g_echo_fall_us);
                     
                     // ×´Ì¬»ú½×¶Î 4£º×îºóÒ»µÀ±£ÏÕ£¬¹ıÂË¼«Õ­Ã«´Ì(¿ÉÄÜÓÉÆäËûµç»úÕğ¶¯»ò¾²µçµ¼ÖÂ)
-                    if(g_echo_time_us >= ULTRASONIC_MIN_VALID_US)
+                    if((g_echo_time_us >= ULTRASONIC_MIN_VALID_US) &&
+                       ((g_echo_fall_us - g_echo_rise_us) >= ULTRASONIC_MIN_PULSE_WIDTH_US) &&
+                       (g_echo_time_us >= g_echo_accept_min_us) &&
+                       (g_echo_time_us <= g_echo_accept_max_us))
                     {
                         g_echo_captured = 1U;    // ±ê¼ÇÖ÷Ñ­»·¿ÉÒÔÊÕÍøÌáÈ¡Êı¾İÁË
                         g_measure_active = 0U;   // ³¹µ×¹Ø±Õ±¾ÂÖ²âÁ¿´°¿Ú
+                    }
+                    else
+                    {
+                        g_echo_rise_seen = 0U;
+                        g_echo_rise_us = 0U;
+                        g_echo_fall_us = 0U;
                     }
                 }
             }

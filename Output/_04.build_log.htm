@@ -34,15 +34,15 @@ compiling User.c...
   void User_DAC_Configure();
 _01_App\User.h(8): warning:  #1-D: last line of file ends without a newline
   #endif
-_01_App\User.c(260): warning:  #177-D: function "Show_Text_Line"  was declared but never referenced
+_01_App\User.c(265): warning:  #177-D: function "Show_Text_Line"  was declared but never referenced
   static void Show_Text_Line(uint16_t line, char *text) { uint16_t y = (uint16_t)(150 + line * 30); OS_String_Show(280, y, 24, 1, text); }
-_01_App\User.c(261): warning:  #177-D: function "Show_Value_Line"  was declared but never referenced
+_01_App\User.c(266): warning:  #177-D: function "Show_Value_Line"  was declared but never referenced
   static void Show_Value_Line(uint16_t line, char *label, double value, char *format) { char temp[24]; uint16_t y = (uint16_t)(150 + line * 30); sprintf(temp, format, value); OS_String_Show(280, y, 24, 1, label); OS_String_Show(500, y, 24, 1, temp); }
-_01_App\User.c(262): warning:  #177-D: function "Show_Value_Only"  was declared but never referenced
+_01_App\User.c(267): warning:  #177-D: function "Show_Value_Only"  was declared but never referenced
   static void Show_Value_Only(uint16_t line, double value, char *format) { char temp[24]; uint16_t y = (uint16_t)(150 + line * 30); sprintf(temp, format, value); OS_String_Show(500, y, 24, 1, temp); }
 _01_App\User.c: 6 warnings, 0 errors
 linking...
-Program Size: Code=20320 RO-data=42436 RW-data=144 ZI-data=1166840  
+Program Size: Code=20640 RO-data=42436 RW-data=156 ZI-data=1166836  
 ".\Output\_04.axf" - 0 Error(s), 6 Warning(s).
 
 <h2>Software Packages used:</h2>
