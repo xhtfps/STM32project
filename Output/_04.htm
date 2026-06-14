@@ -3,7 +3,7 @@
 <title>Static Call Graph - [.\Output\_04.axf]</title></head>
 <body><HR>
 <H1>Static Call Graph for image .\Output\_04.axf</H1><HR>
-<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 5060528: Last Updated: Sun Jun 14 17:58:20 2026
+<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 5060528: Last Updated: Sun Jun 14 20:07:22 2026
 <BR><P>
 <H3>Maximum Stack Usage =        472 bytes + Unknown(Functions without stacksize, Cycles, Untraceable Function Pointers)</H3><H3>
 Call chain for Maximum Stack Depth:</H3>
@@ -2133,11 +2133,12 @@ Local Symbols
 <BR><BR>[Called By]<UL><LI><a href="#[14]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;EXTI0_IRQHandler
 </UL>
 
-<P><STRONG><a name="[d4]"></a>Ultrasonic_MeasureFiltered</STRONG> (Thumb, 274 bytes, Stack size 280 bytes, user.o(i.Ultrasonic_MeasureFiltered))
+<P><STRONG><a name="[d4]"></a>Ultrasonic_MeasureFiltered</STRONG> (Thumb, 326 bytes, Stack size 280 bytes, user.o(i.Ultrasonic_MeasureFiltered))
 <BR><BR>[Stack]<UL><LI>Max Depth = 392 + Unknown Stack Size
 <LI>Call Chain = Ultrasonic_MeasureFiltered &rArr; Ultrasonic_PrepareGain &rArr; Ultrasonic_ApplyGain &rArr; PGA112_SetGainCode &rArr; PGA112_WriteConfig &rArr; User_SPI_Write16 &rArr; User_SPI_Transfer16 &rArr; delay_us &rArr; OS_SchedUnlock
 </UL>
 <BR>[Calls]<UL><LI><a href="#[d5]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;delay_ms
+<LI><a href="#[a6]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_SetAcceptWindow
 <LI><a href="#[11d]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_PrepareGain
 <LI><a href="#[11e]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_MeasureOnce
 <LI><a href="#[11f]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Sort_Samples
@@ -2176,6 +2177,7 @@ Local Symbols
 
 <P><STRONG><a name="[a6]"></a>Ultrasonic_SetAcceptWindow</STRONG> (Thumb, 20 bytes, Stack size 0 bytes, user.o(i.Ultrasonic_SetAcceptWindow))
 <BR><BR>[Called By]<UL><LI><a href="#[d8]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_SetTrackingWindow
+<LI><a href="#[d4]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_MeasureFiltered
 <LI><a href="#[de]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;MenuHandler_Status
 <LI><a href="#[d2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;MenuHandler_Calibrate
 <LI><a href="#[a5]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Calibration_SetMeasureWindow

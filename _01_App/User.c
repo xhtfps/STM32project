@@ -24,6 +24,9 @@
 
 // 增益补偿最大重试次数：当回波信号微弱未触发中断时，尝试提升可编程增益放大器(PGA)倍数的次数
 #define ULTRASONIC_GAIN_RETRY_MAX    3U
+#define ULTRASONIC_TRACK_MARGIN_US   3000U
+#define ULTRASONIC_REACQUIRE_MISSES  2U
+#define ULTRASONIC_REACQUIRE_MIN_US  650U
 
 // Flash存储地址：STM32F407的Sector11起始地址。Sector11大小为128KB。
 // 选择此区域主要是因为它位于Flash末尾，不易与用户的代码区(通常从0x08000000开始)发生冲突。
@@ -66,7 +69,7 @@ typedef struct
 } UltrasonicCalibData;
 
 // 选定4个基准校准距离(单位：毫米)。这些距离覆盖了日常使用的近、中、远区间。
-static const uint16_t k_calib_distance_mm[4] = {100, 600, 900, 1300};
+static const uint16_t k_calib_distance_mm[4] = {100, 600, 900, 2000};
 
 /************************* 全局变量定义 *************************/
 /* * 带有 volatile 关键字的变量，代表它们会在外部中断 (EXTI) 中被随时修改。
@@ -84,6 +87,7 @@ static volatile uint32_t g_echo_accept_max_us = ULTRASONIC_TIMEOUT_US;
 static uint8_t g_gain_settle_discard = 0;       // 运放增益切换后，硬件电路需要建立时间。此标志提示丢弃切换后的首次测量。
 static uint32_t g_last_echo_us = 1500U;         // 保存上一次有效测量的回波时间。利用空间相关性，预测下一次所需的增益倍数。
 static uint8_t g_tracking_valid = 0;           // 实时测量跟踪窗口是否已经锁定有效回波
+static uint8_t g_reacquire_ignore_near = 0;     // Reacquire mode ignores near-end crosstalk
 static uint8_t g_ultrasonic_gain_code = PGA112_DEFAULT_GAIN_CODE; // 记录当前运放的增益挡位
 
 // 校准相关状态变量
@@ -438,9 +442,13 @@ static void Ultrasonic_SetAcceptWindow(uint32_t min_us, uint32_t max_us)
 
 static void Ultrasonic_SetTrackingWindow(void)
 {
-    const uint32_t margin_us = 1200U;
+    const uint32_t margin_us = ULTRASONIC_TRACK_MARGIN_US;
 
-    if(g_tracking_valid == 0U)
+    if(g_reacquire_ignore_near != 0U)
+    {
+        Ultrasonic_SetAcceptWindow(ULTRASONIC_REACQUIRE_MIN_US, ULTRASONIC_TIMEOUT_US);
+    }
+    else if(g_tracking_valid == 0U)
     {
         Ultrasonic_SetAcceptWindow(0, ULTRASONIC_TIMEOUT_US);
     }
@@ -503,6 +511,7 @@ static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us)
     uint8_t valid_count = 0;                     // 有效样本数
     uint8_t attempts = 0;                        // 发射尝试总次数
     uint8_t gain_retry = 0;                      // 失败重试抬升增益计步器
+    uint8_t miss_count = 0;                      // 跟踪窗口内连续丢失回波的次数
     uint8_t index;
 
     // 在总尝试次数耗尽前，努力填满所需样本池
@@ -524,9 +533,16 @@ static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us)
             }
 
             // 成功采集一条有效数据存入池中
+            if((g_reacquire_ignore_near != 0U) && (sample < ULTRASONIC_REACQUIRE_MIN_US))
+            {
+                continue;
+            }
+
             samples[valid_count++] = sample;
             g_last_echo_us = sample; // 刷新测距历史记忆
             gain_retry = 0;          // 采集成功，重试增益计步清零
+            miss_count = 0;
+            g_reacquire_ignore_near = 0U;
         }
         else
         {
@@ -535,9 +551,27 @@ static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us)
             {
                 g_gain_settle_discard = 0; // 同样丢弃增益不稳定期的失败
             }
-            else if(gain_retry < ULTRASONIC_GAIN_RETRY_MAX)
+            else
             {
-                gain_retry++; // 增加一级增益，下次尝试接收微弱回波
+                if(gain_retry < ULTRASONIC_GAIN_RETRY_MAX)
+                {
+                    gain_retry++; // 增加一级增益，下次尝试接收微弱回波
+                }
+
+                if(g_tracking_valid != 0U)
+                {
+                    miss_count++;
+                    if(miss_count >= ULTRASONIC_REACQUIRE_MISSES)
+                    {
+                        valid_count = 0U;
+                        miss_count = 0U;
+                        g_tracking_valid = 0U;
+                        g_reacquire_ignore_near = 1U;
+                        g_last_echo_us = ULTRASONIC_TIMEOUT_US;
+                        gain_retry = ULTRASONIC_GAIN_RETRY_MAX;
+                        Ultrasonic_SetAcceptWindow(ULTRASONIC_REACQUIRE_MIN_US, ULTRASONIC_TIMEOUT_US);
+                    }
+                }
             }
         }
         // 降低探头发射占空比，防止声波在狭小空间反射堆积形成驻波干扰
@@ -713,7 +747,7 @@ static void Calibration_SetMeasureWindow(uint16_t distance_mm)
         case 900U:
             Ultrasonic_SetAcceptWindow(5000U, 7400U);
             break;
-        case 1300U:
+        case 2000U:
             Ultrasonic_SetAcceptWindow(7400U, ULTRASONIC_TIMEOUT_US);
             break;
         default:
@@ -730,7 +764,7 @@ static float Convert_Time_To_Distance_Default(uint32_t echo_us)
 
     // 输出限幅滤波器：钳制在硬件合理量程区间
     if(distance < 10.0f) distance = 10.0f;
-    if(distance > 1300.0f) distance = 1300.0f;
+    if(distance > 2000.0f) distance = 2000.0f;
     return distance;
 }
 
@@ -781,8 +815,8 @@ static float Convert_Time_To_Distance(uint32_t echo_us)
     distance = y0 + ((float)echo_us - x0) * (y1 - y0) / (x1 - x0);
     
     // 量程硬约束
-    if(distance < 10.0f) distance = 10.0f;
-    if(distance > 1300.0f) distance = 1300.0f;
+    if(distance < (float)k_calib_distance_mm[0]) distance = (float)k_calib_distance_mm[0];
+    if(distance > 2000.0f) distance = 2000.0f;
     return distance;
 }
 
@@ -794,6 +828,7 @@ static void MenuHandler_Measure(void)
     Draw_Work_Title("测量模式");
     Draw_Key_Tips("确认开始测量", "返回退出测量");
     g_tracking_valid = 0;
+    g_reacquire_ignore_near = 0U;
     OS_String_Show(280, 150, 24, 1, "测量时间(us)");
     OS_String_Show(280, 180, 24, 1, "测量距离(mm)");
     OS_String_Show(280, 210, 24, 1, "默认距离(mm)");
@@ -825,6 +860,7 @@ static void MenuHandler_Measure(void)
         }
         else
         {
+            g_reacquire_ignore_near = 1U;
             g_tracking_valid = 0;
             Show_Text_Value_Only(3, "测量失败");
             sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
@@ -860,7 +896,7 @@ static void MenuHandler_Calibrate(void)
     OS_String_Show(280, 210, 24, 1, "100mm(us)");
     OS_String_Show(280, 240, 24, 1, "600mm(us)");
     OS_String_Show(280, 270, 24, 1, "900mm(us)");
-    OS_String_Show(280, 300, 24, 1, "1300mm(us)");
+    OS_String_Show(280, 300, 24, 1, "2000mm(us)");
     OS_String_Show(280, 330, 24, 1, "当前测值(us)");
     OS_String_Show(280, 360, 24, 1, "校准结果");
     Show_Text_Value_Only(1, "等待校准");
