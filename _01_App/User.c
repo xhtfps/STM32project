@@ -19,7 +19,8 @@
 #define ULTRASONIC_BLANKING_US       450U   
 
 // 滤波采样次数：决定了单次有效测距需要采集多少个样本。必须配合去极值算法使用。
-#define ULTRASONIC_FILTER_SAMPLES    9U
+#define ULTRASONIC_FILTER_SAMPLES    60U
+#define ULTRASONIC_CLUSTER_SPAN_US   180U
 
 // 增益补偿最大重试次数：当回波信号微弱未触发中断时，尝试提升可编程增益放大器(PGA)倍数的次数
 #define ULTRASONIC_GAIN_RETRY_MAX    3U
@@ -82,6 +83,7 @@ static volatile uint32_t g_echo_accept_max_us = ULTRASONIC_TIMEOUT_US;
 
 static uint8_t g_gain_settle_discard = 0;       // 运放增益切换后，硬件电路需要建立时间。此标志提示丢弃切换后的首次测量。
 static uint32_t g_last_echo_us = 1500U;         // 保存上一次有效测量的回波时间。利用空间相关性，预测下一次所需的增益倍数。
+static uint8_t g_tracking_valid = 0;           // 实时测量跟踪窗口是否已经锁定有效回波
 static uint8_t g_ultrasonic_gain_code = PGA112_DEFAULT_GAIN_CODE; // 记录当前运放的增益挡位
 
 // 校准相关状态变量
@@ -116,6 +118,7 @@ static uint8_t Ultrasonic_SelectGainCode(uint32_t echo_us);
 static uint32_t Ultrasonic_EstimatePeakTime(uint32_t rise_us, uint32_t fall_us);
 static void Ultrasonic_PrepareGain(uint8_t retry_count);
 static void Ultrasonic_SetAcceptWindow(uint32_t min_us, uint32_t max_us);
+static void Ultrasonic_SetTrackingWindow(void);
 static uint8_t Ultrasonic_MeasureOnce(uint32_t *echo_us);
 static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us);
 static void Sort_Samples(uint32_t *data, uint8_t length);
@@ -433,6 +436,25 @@ static void Ultrasonic_SetAcceptWindow(uint32_t min_us, uint32_t max_us)
 }
 
 
+static void Ultrasonic_SetTrackingWindow(void)
+{
+    const uint32_t margin_us = 1200U;
+
+    if(g_tracking_valid == 0U)
+    {
+        Ultrasonic_SetAcceptWindow(0, ULTRASONIC_TIMEOUT_US);
+    }
+    else if(g_last_echo_us > margin_us)
+    {
+        Ultrasonic_SetAcceptWindow(g_last_echo_us - margin_us, g_last_echo_us + margin_us);
+    }
+    else
+    {
+        Ultrasonic_SetAcceptWindow(ULTRASONIC_BLANKING_US, g_last_echo_us + margin_us);
+    }
+}
+
+
 static uint8_t Ultrasonic_MeasureOnce(uint32_t *echo_us)
 {
     uint32_t timeout;
@@ -481,11 +503,10 @@ static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us)
     uint8_t valid_count = 0;                     // 有效样本数
     uint8_t attempts = 0;                        // 发射尝试总次数
     uint8_t gain_retry = 0;                      // 失败重试抬升增益计步器
-    uint32_t sum = 0;
     uint8_t index;
 
     // 在总尝试次数耗尽前，努力填满所需样本池
-    while(attempts < (ULTRASONIC_FILTER_SAMPLES + 6U) && valid_count < ULTRASONIC_FILTER_SAMPLES)
+    while(attempts < (ULTRASONIC_FILTER_SAMPLES + 20U) && valid_count < ULTRASONIC_FILTER_SAMPLES)
     {
         uint32_t sample = 0;
 
@@ -498,7 +519,7 @@ static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us)
             if(g_gain_settle_discard != 0U)
             {
                 g_gain_settle_discard = 0;
-                delay_ms(20);
+                delay_ms(8);
                 continue;
             }
 
@@ -520,7 +541,7 @@ static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us)
             }
         }
         // 降低探头发射占空比，防止声波在狭小空间反射堆积形成驻波干扰
-        delay_ms(20); 
+        delay_ms(8);
     }
 
     if(valid_count == 0U)
@@ -531,22 +552,42 @@ static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us)
     // 将收集到的样本进行升序排序
     Sort_Samples(samples, valid_count);
     
-    // 核心算法：掐头去尾求平均
+    // 选择最密集的一簇样本，避免两组不同回波被平均到一起
     if(valid_count >= 3U)
     {
-        // 如果样本充足(>=5个)，掐掉2个最大值和2个最小值；否则只掐掉最大最小各1个
-        uint8_t trim = (valid_count >= 5U) ? 2U : 1U;
-        
-        for(index = trim; index < (uint8_t)(valid_count - trim); index++)
+        uint8_t best_start = 0U;
+        uint8_t best_count = 1U;
+        uint8_t best_mid;
+
+        for(index = 0U; index < valid_count; index++)
         {
-            sum += samples[index];
+            uint8_t count = 1U;
+            uint8_t scan;
+
+            for(scan = (uint8_t)(index + 1U); scan < valid_count; scan++)
+            {
+                if((samples[scan] - samples[index]) <= ULTRASONIC_CLUSTER_SPAN_US)
+                {
+                    count++;
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            if(count > best_count)
+            {
+                best_count = count;
+                best_start = index;
+            }
         }
-        // 计算抛弃极端值后的平均数
-        *echo_us = sum / (valid_count - (uint8_t)(trim * 2U));
+
+        best_mid = (uint8_t)(best_start + best_count / 2U);
+        *echo_us = samples[best_mid];
     }
     else
     {
-        // 如果样本少于3个，直接取中间那个数
         *echo_us = samples[valid_count / 2U];
     }
 
@@ -685,7 +726,7 @@ static void Calibration_SetMeasureWindow(uint16_t distance_mm)
 static float Convert_Time_To_Distance_Default(uint32_t echo_us)
 {
     // 理想公式：距离(mm) = 时间(us) * 0.1715
-    float distance = (float)echo_us * 0.1486f;
+    float distance = (float)echo_us * 0.164866f;
 
     // 输出限幅滤波器：钳制在硬件合理量程区间
     if(distance < 10.0f) distance = 10.0f;
@@ -752,7 +793,7 @@ static void MenuHandler_Measure(void)
 
     Draw_Work_Title("测量模式");
     Draw_Key_Tips("确认开始测量", "返回退出测量");
-    Ultrasonic_SetAcceptWindow(0, ULTRASONIC_TIMEOUT_US);
+    g_tracking_valid = 0;
     OS_String_Show(280, 150, 24, 1, "测量时间(us)");
     OS_String_Show(280, 180, 24, 1, "测量距离(mm)");
     OS_String_Show(280, 210, 24, 1, "默认距离(mm)");
@@ -766,9 +807,11 @@ static void MenuHandler_Measure(void)
     while(Ps2KeyValue != KeyValue_Back)
     {
         uint32_t echo_us = 0;
+        Ultrasonic_SetTrackingWindow();
         if(Ultrasonic_MeasureFiltered(&echo_us) != 0U)
         {
             float distance = Convert_Time_To_Distance(echo_us);
+            g_tracking_valid = 1;
             sprintf(value_text, "%05lu", (unsigned long)echo_us);
             Show_Text_Value_Only(0, value_text);
             sprintf(value_text, "%06.1f", (double)distance);
@@ -782,6 +825,7 @@ static void MenuHandler_Measure(void)
         }
         else
         {
+            g_tracking_valid = 0;
             Show_Text_Value_Only(3, "测量失败");
             sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
             Show_Text_Value_Only(4, value_text);
@@ -1049,7 +1093,7 @@ void EXTI0_IRQHandler(void)
                 if(GPIO_ReadInputDataBit(GPIOC, GPIO_Pin_0) != Bit_RESET)
                 {
                     // 状态机阶段 2：如果之前还没记录过上升沿，那么就记录这一刻为起点
-                    if(g_echo_rise_seen == 0U)
+                    if((g_echo_rise_seen == 0U) && (now >= g_echo_accept_min_us))
                     {
                         g_echo_rise_us = now;
                         g_echo_rise_seen = 1U;
