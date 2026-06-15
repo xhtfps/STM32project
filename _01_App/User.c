@@ -1,111 +1,111 @@
 #include "User.h"
 #include "Drive_PWM.h"
 
-/************************* 超声波模块参数配置 *************************/
+/************************* 瓒呭０娉㈡ā鍧楀弬鏁伴厤缃� *************************/
 /*
- * 物理原理：常温空气中声速 ≈ 343 m/s
- * 1μs 声波单程距离：343 * 100 / 1000000 = 0.0343 cm = 0.343 mm
- * 超声波往返测距，因此 1μs 对应实际距离：0.343 / 2 = 0.1715 mm
+ * 鐗╃悊鍘熺悊锛氬父娓╃┖姘斾腑澹伴€� 鈮� 343 m/s
+ * 1渭s 澹版尝鍗曠▼璺濈锛�343 * 100 / 1000000 = 0.0343 cm = 0.343 mm
+ * 瓒呭０娉㈠線杩旀祴璺濓紝鍥犳 1渭s 瀵瑰簲瀹為檯璺濈锛�0.343 / 2 = 0.1715 mm
  */
-// 测量超时时间(μs)：对应最大测距约2m，理论往返时间≈11662μs，预留余量设为12000μs
+// 娴嬮噺瓒呮椂鏃堕棿(渭s)锛氬搴旀渶澶ф祴璺濈害2m锛岀悊璁哄線杩旀椂闂粹増11662渭s锛岄鐣欎綑閲忚涓�12000渭s
 #define ULTRASONIC_TIMEOUT_US        12000U
-// 最小有效回波时间(μs)：滤除电路串扰、静电产生的极短干扰脉冲
+// 鏈€灏忔湁鏁堝洖娉㈡椂闂�(渭s)锛氭护闄ょ數璺覆鎵般€侀潤鐢典骇鐢熺殑鏋佺煭骞叉壈鑴夊啿
 #define ULTRASONIC_MIN_VALID_US      20U
-// 回波脉冲最小宽度(μs)：小于该值判定为毛刺干扰，丢弃
+// 鍥炴尝鑴夊啿鏈€灏忓搴�(渭s)锛氬皬浜庤鍊煎垽瀹氫负姣涘埡骞叉壈锛屼涪寮�
 #define ULTRASONIC_MIN_PULSE_WIDTH_US  30U
-// 发射盲区/消隐时间(μs)：探头发射后存在机械余震+电路自激，此段时间屏蔽接收
-// 450μs盲区对应近距离约 7.7cm，避免近距自激误触发
+// 鍙戝皠鐩插尯/娑堥殣鏃堕棿(渭s)锛氭帰澶村彂灏勫悗瀛樺湪鏈烘浣欓渿+鐢佃矾鑷縺锛屾娈垫椂闂村睆钄芥帴鏀�
+// 450渭s鐩插尯瀵瑰簲杩戣窛绂荤害 7.7cm锛岄伩鍏嶈繎璺濊嚜婵€璇Е鍙�
 #define ULTRASONIC_BLANKING_US       450U   
-// 滤波采样次数：单次有效测距采集N组样本，配合去极值、聚类算法降噪
+// 婊ゆ尝閲囨牱娆℃暟锛氬崟娆℃湁鏁堟祴璺濋噰闆哊缁勬牱鏈紝閰嶅悎鍘绘瀬鍊笺€佽仛绫荤畻娉曢檷鍣�
 #define ULTRASONIC_FILTER_SAMPLES    60U
-// 样本聚类区间(μs)：判定两组采样值是否属于同一有效回波簇
+// 鏍锋湰鑱氱被鍖洪棿(渭s)锛氬垽瀹氫袱缁勯噰鏍峰€兼槸鍚﹀睘浜庡悓涓€鏈夋晥鍥炴尝绨�
 #define ULTRASONIC_CLUSTER_SPAN_US   180U
-// 增益最大重试次数：回波微弱未检测到时，逐级抬升PGA增益的最大尝试次数
+// 澧炵泭鏈€澶ч噸璇曟鏁帮細鍥炴尝寰急鏈娴嬪埌鏃讹紝閫愮骇鎶崌PGA澧炵泭鐨勬渶澶у皾璇曟鏁�
 #define ULTRASONIC_GAIN_RETRY_MAX    3U
-// 跟踪窗口余量(μs)：锁定有效回波后，在历史值基础上扩展窗口范围，动态跟踪目标
+// 璺熻釜绐楀彛浣欓噺(渭s)锛氶攣瀹氭湁鏁堝洖娉㈠悗锛屽湪鍘嗗彶鍊煎熀纭€涓婃墿灞曠獥鍙ｈ寖鍥达紝鍔ㄦ€佽窡韪洰鏍�
 #define ULTRASONIC_TRACK_MARGIN_US   3000U
-// 连续丢失回波次数阈值：超过该值判定目标丢失，重新全域搜索
+// 杩炵画涓㈠け鍥炴尝娆℃暟闃堝€硷細瓒呰繃璇ュ€煎垽瀹氱洰鏍囦涪澶憋紝閲嶆柊鍏ㄥ煙鎼滅储
 #define ULTRASONIC_REACQUIRE_MISSES  2U
-// 重搜索模式下最小接收时间(μs)：屏蔽近距离自激干扰，专注远距离搜索
+// 閲嶆悳绱㈡ā寮忎笅鏈€灏忔帴鏀舵椂闂�(渭s)锛氬睆钄借繎璺濈鑷縺骞叉壈锛屼笓娉ㄨ繙璺濈鎼滅储
 #define ULTRASONIC_REACQUIRE_MIN_US  650U
-// 校准数据Flash存储地址：STM32F407 Sector11起始地址(Flash最后128KB扇区)
-// 选用末尾扇区，避免与程序代码区(0x08000000开始)冲突
+// 鏍″噯鏁版嵁Flash瀛樺偍鍦板潃锛歋TM32F407 Sector11璧峰鍦板潃(Flash鏈€鍚�128KB鎵囧尯)
+// 閫夌敤鏈熬鎵囧尯锛岄伩鍏嶄笌绋嬪簭浠ｇ爜鍖�(0x08000000寮€濮�)鍐茬獊
 #define ULTRASONIC_FLASH_ADDR        0x080E0000U
-// Flash数据魔数：ASCII "USON" (0x55 0x53 0x4F 0x4E)
-// 上电校验魔数，判断Flash区域是否为合法校准数据，区分空白/乱码
+// Flash鏁版嵁榄旀暟锛欰SCII "USON" (0x55 0x53 0x4F 0x4E)
+// 涓婄數鏍￠獙榄旀暟锛屽垽鏂璅lash鍖哄煙鏄惁涓哄悎娉曟牎鍑嗘暟鎹紝鍖哄垎绌虹櫧/涔辩爜
 #define ULTRASONIC_FLASH_MAGIC       0x55534F4EU  
-// 数据版本号：结构体/字段变更时升级版本，使旧版校准数据自动失效，防止解析错误
+// 鏁版嵁鐗堟湰鍙凤細缁撴瀯浣�/瀛楁鍙樻洿鏃跺崌绾х増鏈紝浣挎棫鐗堟牎鍑嗘暟鎹嚜鍔ㄥけ鏁堬紝闃叉瑙ｆ瀽閿欒
 #define ULTRASONIC_FLASH_VERSION     0x00010004U  
 
-/************************* 屏幕显示常量定义 *************************/
-#define TITLE_STR        "超声波测距仪"         // 主界面顶部标题
-#define MODEL_VER_STR    "型号：HC-SR04"       // 硬件型号标注
-#define USER_VER_STR     "版本：V1.0"          // 软件版本号
-#define MENU1_CHOICE1    "1. 实时测量"         // 菜单选项1
-#define MENU1_CHOICE2    "2. 距离校准"         // 菜单选项2
-#define MENU1_CHOICE3    "3. 系统状态"         // 菜单选项3
-#define MENU1_CHOICE4    "4. 程控调节"         // 菜单选项4
-#define MENU_CHOICE_NUM  4                    // 菜单总数量
+/************************* 灞忓箷鏄剧ず甯搁噺瀹氫箟 *************************/
+#define TITLE_STR        "瓒呭０娉㈡祴璺濅华"         // 涓荤晫闈㈤《閮ㄦ爣棰�
+#define MODEL_VER_STR    "鍨嬪彿锛欻C-SR04"       // 纭欢鍨嬪彿鏍囨敞
+#define USER_VER_STR     "鐗堟湰锛歏1.0"          // 杞欢鐗堟湰鍙�
+#define MENU1_CHOICE1    "1. 鎵嬪姩娴嬮噺"         // 鑿滃崟閫夐」1
+#define MENU1_CHOICE2    "2. 璺濈鏍″噯"         // 鑿滃崟閫夐」2
+#define MENU1_CHOICE3    "3. 绯荤粺鐘舵€�"         // 鑿滃崟閫夐」3
+#define MENU1_CHOICE4    "4. 绋嬫帶璋冭妭"         // 鑿滃崟閫夐」4
+#define MENU_CHOICE_NUM  4                    // 鑿滃崟鎬绘暟閲�
 
-// 局部清屏空白串：用空格覆盖原有字符，比全局清屏LCD_Clear效率更高，减少刷屏闪烁
-#define UI_BLANK_TEXT_16 "                                                                "  // 16号字体 64字符空格
-#define UI_BLANK_TEXT_24 "                                                "                // 24号字体 48字符空格
-#define UI_BLANK_TEXT_32 "                                "                                // 32号字体 32字符空格
-#define UI_VALUE_BLANK_24 "                        "                                       // 数值区专用空白串
+// 灞€閮ㄦ竻灞忕┖鐧戒覆锛氱敤绌烘牸瑕嗙洊鍘熸湁瀛楃锛屾瘮鍏ㄥ眬娓呭睆LCD_Clear鏁堢巼鏇撮珮锛屽噺灏戝埛灞忛棯鐑�
+#define UI_BLANK_TEXT_16 "                                                                "  // 16鍙峰瓧浣� 64瀛楃绌烘牸
+#define UI_BLANK_TEXT_24 "                                                "                // 24鍙峰瓧浣� 48瀛楃绌烘牸
+#define UI_BLANK_TEXT_32 "                                "                                // 32鍙峰瓧浣� 32瀛楃绌烘牸
+#define UI_VALUE_BLANK_24 "                        "                                       // 鏁板€煎尯涓撶敤绌虹櫧涓�
 
-/************************* 数据结构定义 *************************/
+/************************* 鏁版嵁缁撴瀯瀹氫箟 *************************/
 
 /**
- * @brief 超声波分段线性校准数据结构体
- * @note 用于修正硬件延迟、声速漂移、电路非线性误差，采用多点分段插值校准
- * @attention 结构体自然4字节对齐，适配Flash 32bit字写入规则
+ * @brief 瓒呭０娉㈠垎娈电嚎鎬ф牎鍑嗘暟鎹粨鏋勪綋
+ * @note 鐢ㄤ簬淇纭欢寤惰繜銆佸０閫熸紓绉汇€佺數璺潪绾挎€ц宸紝閲囩敤澶氱偣鍒嗘鎻掑€兼牎鍑�
+ * @attention 缁撴瀯浣撹嚜鐒�4瀛楄妭瀵归綈锛岄€傞厤Flash 32bit瀛楀啓鍏ヨ鍒�
  */
 typedef struct
 {
-    uint32_t magic;               // 数据合法性魔数标志
-    uint32_t version;             // 结构体版本号
-    uint32_t point_us[5];         // 存储5个标准距离下实际测得的回波时间(μs)
-    uint32_t reserved[1];         // 预留空间，保证结构体总大小32字节
+    uint32_t magic;               // 鏁版嵁鍚堟硶鎬ч瓟鏁版爣蹇�
+    uint32_t version;             // 缁撴瀯浣撶増鏈彿
+    uint32_t point_us[5];         // 瀛樺偍5涓爣鍑嗚窛绂讳笅瀹為檯娴嬪緱鐨勫洖娉㈡椂闂�(渭s)
+    uint32_t reserved[1];         // 棰勭暀绌洪棿锛屼繚璇佺粨鏋勪綋鎬诲ぇ灏�32瀛楄妭
 } UltrasonicCalibData;
 
-// 5组基准校准距离(单位：mm)，覆盖近、中、远全量程区间
+// 5缁勫熀鍑嗘牎鍑嗚窛绂�(鍗曚綅锛歮m)锛岃鐩栬繎銆佷腑銆佽繙鍏ㄩ噺绋嬪尯闂�
 static const uint16_t k_calib_distance_mm[5] = {100, 300, 600, 900, 1300};
 
-/************************* 全局变量定义 *************************/
+/************************* 鍏ㄥ眬鍙橀噺瀹氫箟 *************************/
 /*
- * volatile 关键字说明：
- * 以下变量均在【外部中断EXTI】中修改，volatile强制编译器每次从内存读取，
- * 禁止编译器优化，防止中断与主循环变量不同步、状态机卡死。
+ * volatile 鍏抽敭瀛楄鏄庯細
+ * 浠ヤ笅鍙橀噺鍧囧湪銆愬閮ㄤ腑鏂璄XTI銆戜腑淇敼锛寁olatile寮哄埗缂栬瘧鍣ㄦ瘡娆′粠鍐呭瓨璇诲彇锛�
+ * 绂佹缂栬瘧鍣ㄤ紭鍖栵紝闃叉涓柇涓庝富寰幆鍙橀噺涓嶅悓姝ャ€佺姸鎬佹満鍗℃銆�
  */
-static volatile uint8_t g_echo_captured = 0;    // 回波捕获完成标志 1=成功 0=未完成
-static volatile uint8_t g_measure_active = 0;   // 测量窗口使能标志 1=允许中断接收回波 0=屏蔽
-static volatile uint32_t g_echo_time_us = 0;    // 最终计算得到的回波峰值时间(μs)
-static volatile uint32_t g_echo_rise_us = 0;    // 回波脉冲上升沿时刻(μs)
-static volatile uint32_t g_echo_fall_us = 0;    // 回波脉冲下降沿时刻(μs)
-static volatile uint8_t g_echo_rise_seen = 0;   // 状态机标志：是否已检测到上升沿
-static volatile uint32_t g_echo_accept_min_us = 0;  // 回波接收窗口下限(μs)
-static volatile uint32_t g_echo_accept_max_us = ULTRASONIC_TIMEOUT_US; // 回波接收窗口上限(μs)
+static volatile uint8_t g_echo_captured = 0;    // 鍥炴尝鎹曡幏瀹屾垚鏍囧織 1=鎴愬姛 0=鏈畬鎴�
+static volatile uint8_t g_measure_active = 0;   // 娴嬮噺绐楀彛浣胯兘鏍囧織 1=鍏佽涓柇鎺ユ敹鍥炴尝 0=灞忚斀
+static volatile uint32_t g_echo_time_us = 0;    // 鏈€缁堣绠楀緱鍒扮殑鍥炴尝宄板€兼椂闂�(渭s)
+static volatile uint32_t g_echo_rise_us = 0;    // 鍥炴尝鑴夊啿涓婂崌娌挎椂鍒�(渭s)
+static volatile uint32_t g_echo_fall_us = 0;    // 鍥炴尝鑴夊啿涓嬮檷娌挎椂鍒�(渭s)
+static volatile uint8_t g_echo_rise_seen = 0;   // 鐘舵€佹満鏍囧織锛氭槸鍚﹀凡妫€娴嬪埌涓婂崌娌�
+static volatile uint32_t g_echo_accept_min_us = 0;  // 鍥炴尝鎺ユ敹绐楀彛涓嬮檺(渭s)
+static volatile uint32_t g_echo_accept_max_us = ULTRASONIC_TIMEOUT_US; // 鍥炴尝鎺ユ敹绐楀彛涓婇檺(渭s)
 
-static uint8_t g_gain_settle_discard = 0;       // 增益切换标志：1=丢弃本次测量(运放电路需稳定时间)
-static uint32_t g_last_echo_us = 1500U;         // 上一次有效回波时间，用于预测当前增益档位
-static uint8_t g_tracking_valid = 0;           // 跟踪窗口标志 1=已锁定有效回波，开启窄窗口跟踪
-static uint8_t g_reacquire_ignore_near = 0;     // 重搜索标志 1=屏蔽近距离信号，专注远距离搜索
-static uint8_t g_ultrasonic_gain_code = PGA112_DEFAULT_GAIN_CODE; // 当前PGA112增益编码
+static uint8_t g_gain_settle_discard = 0;       // 澧炵泭鍒囨崲鏍囧織锛�1=涓㈠純鏈娴嬮噺(杩愭斁鐢佃矾闇€绋冲畾鏃堕棿)
+static uint32_t g_last_echo_us = 1500U;         // 涓婁竴娆℃湁鏁堝洖娉㈡椂闂达紝鐢ㄤ簬棰勬祴褰撳墠澧炵泭妗ｄ綅
+static uint8_t g_tracking_valid = 0;           // 璺熻釜绐楀彛鏍囧織 1=宸查攣瀹氭湁鏁堝洖娉紝寮€鍚獎绐楀彛璺熻釜
+static uint8_t g_reacquire_ignore_near = 0;     // 閲嶆悳绱㈡爣蹇� 1=灞忚斀杩戣窛绂讳俊鍙凤紝涓撴敞杩滆窛绂绘悳绱�
+static uint8_t g_ultrasonic_gain_code = PGA112_DEFAULT_GAIN_CODE; // 褰撳墠PGA112澧炵泭缂栫爜
 
-// 校准相关变量
-static UltrasonicCalibData g_calib = {0};       // RAM中缓存的校准数据
-static uint8_t g_calib_valid = 0;               // 校准数据有效标志 1=Flash数据合法 0=使用理想公式
+// 鏍″噯鐩稿叧鍙橀噺
+static UltrasonicCalibData g_calib = {0};       // RAM涓紦瀛樼殑鏍″噯鏁版嵁
+static uint8_t g_calib_valid = 0;               // 鏍″噯鏁版嵁鏈夋晥鏍囧織 1=Flash鏁版嵁鍚堟硶 0=浣跨敤鐞嗘兂鍏紡
 
-// 界面状态机：菜单切换标志
-static uint8_t g_menu_sign = 0;                // 0=主菜单 1=实时测量 2=距离校准 3=系统状态 4=程控增益
+// 鐣岄潰鐘舵€佹満锛氳彍鍗曞垏鎹㈡爣蹇�
+static uint8_t g_menu_sign = 0;                // 0=涓昏彍鍗� 1=瀹炴椂娴嬮噺 2=璺濈鏍″噯 3=绯荤粺鐘舵€� 4=绋嬫帶澧炵泭
 
-/************************* 函数声明 *************************/
-// 系统初始化 + 主界面绘制
+/************************* 鍑芥暟澹版槑 *************************/
+// 绯荤粺鍒濆鍖� + 涓荤晫闈㈢粯鍒�
 static void Init_All(void);
 static void Disp_Main(void);
 static void Change_Menu(uint8_t menu_sign);
 
-// UI工具函数：局部清屏、文字绘制、按键等待
+// UI宸ュ叿鍑芥暟锛氬眬閮ㄦ竻灞忋€佹枃瀛楃粯鍒躲€佹寜閿瓑寰�
 static void Clear_Work_Area(void);
 static void Clear_Work_Text(void);
 static void Draw_Work_Title(char *title);
@@ -116,7 +116,7 @@ static void Show_Value_Only(uint16_t line, double value, char *format);
 static void Show_Text_Value_Only(uint16_t line, char *text);
 static void Wait_Ps2KeyRelease(uint8_t key_value);
 
-// 超声波硬件底层驱动：定时器、外部中断、PGA增益、单次测量
+// 瓒呭０娉㈢‖浠跺簳灞傞┍鍔細瀹氭椂鍣ㄣ€佸閮ㄤ腑鏂€丳GA澧炵泭銆佸崟娆℃祴閲�
 static void Ultrasonic_Timer_Init(void);
 static void Ultrasonic_Echo_Init(void);
 static void Ultrasonic_ApplyGain(uint8_t gain_code);
@@ -129,7 +129,7 @@ static uint8_t Ultrasonic_MeasureOnce(uint32_t *echo_us);
 static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us);
 static void Sort_Samples(uint32_t *data, uint8_t length);
 
-// 校准、Flash读写、时间-距离转换算法
+// 鏍″噯銆丗lash璇诲啓銆佹椂闂�-璺濈杞崲绠楁硶
 static void Calibration_Load(void);
 static uint8_t Calibration_IsValid(const UltrasonicCalibData *calib);
 static uint8_t Calibration_Save(const UltrasonicCalibData *calib);
@@ -137,102 +137,102 @@ static void Calibration_SetMeasureWindow(uint16_t distance_mm);
 static float Convert_Time_To_Distance(uint32_t echo_us);
 static float Convert_Time_To_Distance_Default(uint32_t echo_us);
 
-// 各菜单业务逻辑处理函数
+// 鍚勮彍鍗曚笟鍔￠€昏緫澶勭悊鍑芥暟
 static void MenuHandler_Measure(void);
 static void MenuHandler_Calibrate(void);
 static void MenuHandler_Status(void);
 static void MenuHandler_PGA_Test(void);
 
-/************************* 主函数 *************************/
+/************************* 涓诲嚱鏁� *************************/
 /**
- * @brief 应用层主入口函数，裸机状态机框架
- * @note 无限循环中检测菜单状态，执行对应功能模块，并响应PS2键盘输入
+ * @brief 搴旂敤灞備富鍏ュ彛鍑芥暟锛岃８鏈虹姸鎬佹満妗嗘灦
+ * @note 鏃犻檺寰幆涓娴嬭彍鍗曠姸鎬侊紝鎵ц瀵瑰簲鍔熻兘妯″潡锛屽苟鍝嶅簲PS2閿洏杈撳叆
  */
 void User_main(void)
 {
-    Init_All();          // 初始化所有硬件、读取Flash校准数据
-    Disp_Main();         // 绘制主菜单静态界面
+    Init_All();          // 鍒濆鍖栨墍鏈夌‖浠躲€佽鍙朏lash鏍″噯鏁版嵁
+    Disp_Main();         // 缁樺埗涓昏彍鍗曢潤鎬佺晫闈�
 
-    // 裸机死循环 + 状态机架构，轮询菜单与按键
+    // 瑁告満姝诲惊鐜� + 鐘舵€佹満鏋舵瀯锛岃疆璇㈣彍鍗曚笌鎸夐敭
     while(1)
     {
         switch(g_menu_sign)
         {
-            case 0:  // 主菜单状态：轮询按键，切换子菜单
+            case 0:  // 涓昏彍鍗曠姸鎬侊細杞鎸夐敭锛屽垏鎹㈠瓙鑿滃崟
                 if(Ps2KeyValue >= KeyValue_1 && Ps2KeyValue <= KeyValue_4)
                 {
-                    // 根据按键值(1~4)切换到对应子菜单
+                    // 鏍规嵁鎸夐敭鍊�(1~4)鍒囨崲鍒板搴斿瓙鑿滃崟
                     Change_Menu((uint8_t)(Ps2KeyValue - KeyValue_0));
                 }
                 break;
 
-            case 1:  // 实时测量界面
+            case 1:  // 瀹炴椂娴嬮噺鐣岄潰
                 MenuHandler_Measure();
                 break;
 
-            case 2:  // 距离校准界面
+            case 2:  // 璺濈鏍″噯鐣岄潰
                 MenuHandler_Calibrate();
                 break;
 
-            case 3:  // 系统状态查看界面
+            case 3:  // 绯荤粺鐘舵€佹煡鐪嬬晫闈�
                 MenuHandler_Status();
                 break;
 
-            case 4:  // PGA程控增益/PWM测试界面
+            case 4:  // PGA绋嬫帶澧炵泭/PWM娴嬭瘯鐣岄潰
                 MenuHandler_PGA_Test();
                 break;
 
-            default: // 异常状态兜底：状态跑飞强制切回主菜单
+            default: // 寮傚父鐘舵€佸厹搴曪細鐘舵€佽窇椋炲己鍒跺垏鍥炰富鑿滃崟
                 g_menu_sign = 0;
                 break;
         }
-        delay_ms(10);  // 短暂延时，降低CPU占用、消抖、防空转
+        delay_ms(10);  // 鐭殏寤舵椂锛岄檷浣嶤PU鍗犵敤銆佹秷鎶栥€侀槻绌鸿浆
     }
 }
 
-/************************* 系统初始化函数 *************************/
+/************************* 绯荤粺鍒濆鍖栧嚱鏁� *************************/
 /**
- * @brief 整体硬件初始化：LCD、PWM、定时、外部中断、校准数据加载
+ * @brief 鏁翠綋纭欢鍒濆鍖栵細LCD銆丳WM銆佸畾鏃躲€佸閮ㄤ腑鏂€佹牎鍑嗘暟鎹姞杞�
  */
 static void Init_All(void)
 {
-    LCD_Clear(Black);                  // 全屏清屏为黑色背景
-    Ultrasonic_PWM_Init();             // 初始化40kHz发射PWM波形驱动 (互补PWM，驱动超声波探头)
-    Ultrasonic_Timer_Init();           // 初始化TIM5微秒级高精度计时器
-    Ultrasonic_Echo_Init();            // 初始化回波接收外部中断 (PC0双边沿触发)
-    Calibration_Load();                // 从Flash读取历史校准数据到RAM
+    LCD_Clear(Black);                  // 鍏ㄥ睆娓呭睆涓洪粦鑹茶儗鏅�
+    Ultrasonic_PWM_Init();             // 鍒濆鍖�40kHz鍙戝皠PWM娉㈠舰椹卞姩 (浜掕ˉPWM锛岄┍鍔ㄨ秴澹版尝鎺㈠ご)
+    Ultrasonic_Timer_Init();           // 鍒濆鍖朤IM5寰绾ч珮绮惧害璁℃椂鍣�
+    Ultrasonic_Echo_Init();            // 鍒濆鍖栧洖娉㈡帴鏀跺閮ㄤ腑鏂� (PC0鍙岃竟娌胯Е鍙�)
+    Calibration_Load();                // 浠嶧lash璇诲彇鍘嗗彶鏍″噯鏁版嵁鍒癛AM
 
-    Ultrasonic_ApplyGain(PGA112_DEFAULT_GAIN_CODE); // 设置PGA默认增益档位
-    g_gain_settle_discard = 0;                     // 清除增益稳定丢弃标志
+    Ultrasonic_ApplyGain(PGA112_DEFAULT_GAIN_CODE); // 璁剧疆PGA榛樿澧炵泭妗ｄ綅
+    g_gain_settle_discard = 0;                     // 娓呴櫎澧炵泭绋冲畾涓㈠純鏍囧織
 }
 
-/************************* 主界面显示函数 *************************/
+/************************* 涓荤晫闈㈡樉绀哄嚱鏁� *************************/
 /**
- * @brief 绘制主菜单固定UI：标题、分割线、版本、菜单选项
+ * @brief 缁樺埗涓昏彍鍗曞浐瀹歎I锛氭爣棰樸€佸垎鍓茬嚎銆佺増鏈€佽彍鍗曢€夐」
  */
 static void Disp_Main(void)
 {
     uint8_t count;
 
-    // 顶部标题居中显示
+    // 椤堕儴鏍囬灞呬腑鏄剧ず
     OS_String_Show(272, 16, 32, 1, TITLE_STR);
 
-    // 绘制横竖白色分割线，划分界面区域 (顶部线、底部线、左右分隔线)
-    LCD_Appoint_Clear(0, 64, 800, 72, White);    // 顶部横向分割线
-    LCD_Appoint_Clear(0, 440, 800, 448, White);  // 底部横向分割线
-    LCD_Appoint_Clear(250, 72, 252, 440, White); // 左右区域纵向分割线
+    // 缁樺埗妯珫鐧借壊鍒嗗壊绾匡紝鍒掑垎鐣岄潰鍖哄煙 (椤堕儴绾裤€佸簳閮ㄧ嚎銆佸乏鍙冲垎闅旂嚎)
+    LCD_Appoint_Clear(0, 64, 800, 72, White);    // 椤堕儴妯悜鍒嗗壊绾�
+    LCD_Appoint_Clear(0, 440, 800, 448, White);  // 搴曢儴妯悜鍒嗗壊绾�
+    LCD_Appoint_Clear(250, 72, 252, 440, White); // 宸﹀彸鍖哄煙绾靛悜鍒嗗壊绾�
 
-    // 底部状态栏：硬件型号 + 软件版本
+    // 搴曢儴鐘舵€佹爮锛氱‖浠跺瀷鍙� + 杞欢鐗堟湰
     OS_String_Show(32, 456, 16, 1, MODEL_VER_STR); 
     OS_String_Show(680, 456, 16, 1, USER_VER_STR); 
 
-    // 初始化菜单选项前缀为 "-" (未选中标记)
+    // 鍒濆鍖栬彍鍗曢€夐」鍓嶇紑涓� "-" (鏈€変腑鏍囪)
     for(count = 1; count <= MENU_CHOICE_NUM; count++)
     {
         OS_String_Show(32, (uint16_t)(32 + 64 * count), 32, 1, "-");
     }
 
-    // 绘制左侧4个菜单文字
+    // 缁樺埗宸︿晶4涓彍鍗曟枃瀛�
     OS_String_Show(60, 96, 32, 1, MENU1_CHOICE1);
     OS_String_Show(60, 160, 32, 1, MENU1_CHOICE2);
     OS_String_Show(60, 224, 32, 1, MENU1_CHOICE3);
@@ -240,20 +240,20 @@ static void Disp_Main(void)
 }
 
 /**
- * @brief 菜单切换逻辑：更新选中箭头、刷新状态机、清除按键事件
- * @param menu_sign 目标菜单编号 (1~4)
+ * @brief 鑿滃崟鍒囨崲閫昏緫锛氭洿鏂伴€変腑绠ご銆佸埛鏂扮姸鎬佹満銆佹竻闄ゆ寜閿簨浠�
+ * @param menu_sign 鐩爣鑿滃崟缂栧彿 (1~4)
  */
 static void Change_Menu(uint8_t menu_sign)
 {
     uint8_t count;
 
-    // 先清空所有菜单项前面的选中标记
+    // 鍏堟竻绌烘墍鏈夎彍鍗曢」鍓嶉潰鐨勯€変腑鏍囪
     for(count = 1; count <= MENU_CHOICE_NUM; count++)
     {
         OS_String_Show(32, (uint16_t)(32 + 64 * count), 32, 1, "-");
     }
 
-    // 绘制新选中菜单箭头 ">"，并更新状态机变量
+    // 缁樺埗鏂伴€変腑鑿滃崟绠ご ">"锛屽苟鏇存柊鐘舵€佹満鍙橀噺
     if(menu_sign >= 1 && menu_sign <= MENU_CHOICE_NUM)
     {
         OS_String_Show(32, (uint16_t)(32 + 64 * menu_sign), 32, 1, ">");
@@ -261,48 +261,48 @@ static void Change_Menu(uint8_t menu_sign)
     }
     else
     {
-        g_menu_sign = 0;  // 非法按键，切回主菜单
-        Clear_Work_Area();// 清空右侧工作区
+        g_menu_sign = 0;  // 闈炴硶鎸夐敭锛屽垏鍥炰富鑿滃崟
+        Clear_Work_Area();// 娓呯┖鍙充晶宸ヤ綔鍖�
     }
 
-    Ps2KeyValue = KeyValue_Null;  // 消费本次按键，防止重复触发
+    Ps2KeyValue = KeyValue_Null;  // 娑堣垂鏈鎸夐敭锛岄槻姝㈤噸澶嶈Е鍙�
 }
 
-/************************* UI工具函数 *************************/
+/************************* UI宸ュ叿鍑芥暟 *************************/
 /**
- * @brief 清空右侧工作区域 (调用具体清文本函数)
+ * @brief 娓呯┖鍙充晶宸ヤ綔鍖哄煙 (璋冪敤鍏蜂綋娓呮枃鏈嚱鏁�)
  */
 static void Clear_Work_Area(void) { Clear_Work_Text(); }
 
 /**
- * @brief 用空白字符串局部清屏，效率高于全局LCD_Clear，避免闪烁
- * @note 根据界面布局，分别清空标题区、9行信息区、底部两行提示区
+ * @brief 鐢ㄧ┖鐧藉瓧绗︿覆灞€閮ㄦ竻灞忥紝鏁堢巼楂樹簬鍏ㄥ眬LCD_Clear锛岄伩鍏嶉棯鐑�
+ * @note 鏍规嵁鐣岄潰甯冨眬锛屽垎鍒竻绌烘爣棰樺尯銆�9琛屼俊鎭尯銆佸簳閮ㄤ袱琛屾彁绀哄尯
  */
 static void Clear_Work_Text(void)
 {
     uint8_t line;
-    // 标题区清屏 (32号字体，一行)
+    // 鏍囬鍖烘竻灞� (32鍙峰瓧浣擄紝涓€琛�)
     OS_String_Show(280, 88, 32, 1, UI_BLANK_TEXT_32);
-    // 中间多行文本区清屏 (24号字体，共9行)
+    // 涓棿澶氳鏂囨湰鍖烘竻灞� (24鍙峰瓧浣擄紝鍏�9琛�)
     for(line = 0; line < 9U; line++) 
     { 
         OS_String_Show(280, (uint16_t)(150 + line * 30), 24, 1, UI_BLANK_TEXT_24); 
     }
-    // 底部提示行清屏 (16号字体，两行)
+    // 搴曢儴鎻愮ず琛屾竻灞� (16鍙峰瓧浣擄紝涓よ)
     OS_String_Show(280, 400, 16, 1, UI_BLANK_TEXT_16);
     OS_String_Show(280, 420, 16, 1, UI_BLANK_TEXT_16);
 }
 
 /**
- * @brief 绘制右侧工作区大标题
- * @param title 标题字符串
+ * @brief 缁樺埗鍙充晶宸ヤ綔鍖哄ぇ鏍囬
+ * @param title 鏍囬瀛楃涓�
  */
 static void Draw_Work_Title(char *title) { OS_String_Show(280, 88, 32, 1, title); }
 
 /**
- * @brief 绘制底部按键操作提示 (两行)
- * @param tip1 提示文字1 (通常左侧按键功能)
- * @param tip2 提示文字2 (通常右侧按键功能)
+ * @brief 缁樺埗搴曢儴鎸夐敭鎿嶄綔鎻愮ず (涓よ)
+ * @param tip1 鎻愮ず鏂囧瓧1 (閫氬父宸︿晶鎸夐敭鍔熻兘)
+ * @param tip2 鎻愮ず鏂囧瓧2 (閫氬父鍙充晶鎸夐敭鍔熻兘)
  */
 static void Draw_Key_Tips(char *tip1, char *tip2) 
 { 
@@ -311,9 +311,9 @@ static void Draw_Key_Tips(char *tip1, char *tip2)
 }
 
 /**
- * @brief 按行绘制纯文本 (标签区)
- * @param line 行号 (0起始)
- * @param text 显示文本
+ * @brief 鎸夎缁樺埗绾枃鏈� (鏍囩鍖�)
+ * @param line 琛屽彿 (0璧峰)
+ * @param text 鏄剧ず鏂囨湰
  */
 static void Show_Text_Line(uint16_t line, char *text) 
 { 
@@ -322,11 +322,11 @@ static void Show_Text_Line(uint16_t line, char *text)
 }
 
 /**
- * @brief 绘制"标签: 数值"组合行
- * @param line 行号
- * @param label 标签文字
- * @param value 待显示数值
- * @param format 格式化字符串 (如 "%06.1f")
+ * @brief 缁樺埗"鏍囩: 鏁板€�"缁勫悎琛�
+ * @param line 琛屽彿
+ * @param label 鏍囩鏂囧瓧
+ * @param value 寰呮樉绀烘暟鍊�
+ * @param format 鏍煎紡鍖栧瓧绗︿覆 (濡� "%06.1f")
  */
 static void Show_Value_Line(uint16_t line, char *label, double value, char *format) 
 { 
@@ -338,10 +338,10 @@ static void Show_Value_Line(uint16_t line, char *label, double value, char *form
 }
 
 /**
- * @brief 仅绘制右侧数值区域 (不带标签)
- * @param line 行号
- * @param value 数值
- * @param format 格式化串
+ * @brief 浠呯粯鍒跺彸渚ф暟鍊煎尯鍩� (涓嶅甫鏍囩)
+ * @param line 琛屽彿
+ * @param value 鏁板€�
+ * @param format 鏍煎紡鍖栦覆
  */
 static void Show_Value_Only(uint16_t line, double value, char *format) 
 { 
@@ -352,9 +352,9 @@ static void Show_Value_Only(uint16_t line, double value, char *format)
 }
 
 /**
- * @brief 右侧数值区显示纯文本 (字符串)
- * @param line 行号
- * @param text 文本
+ * @brief 鍙充晶鏁板€煎尯鏄剧ず绾枃鏈� (瀛楃涓�)
+ * @param line 琛屽彿
+ * @param text 鏂囨湰
  */
 static void Show_Text_Value_Only(uint16_t line, char *text) 
 { 
@@ -363,44 +363,44 @@ static void Show_Text_Value_Only(uint16_t line, char *text)
 }
 
 /**
- * @brief 等待按键松开，简单按键消抖+防止长按连发
- * @param key_value 需要等待释放的按键值 (如KeyValue_Enter)
+ * @brief 绛夊緟鎸夐敭鏉惧紑锛岀畝鍗曟寜閿秷鎶�+闃叉闀挎寜杩炲彂
+ * @param key_value 闇€瑕佺瓑寰呴噴鏀剧殑鎸夐敭鍊� (濡侹eyValue_Enter)
  */
 static void Wait_Ps2KeyRelease(uint8_t key_value)
 {
     do
     {
-        Ps2KeyValue = KeyValue_Null; // 清空按键值
-        delay_ms(30);                // 等待30ms
-    } while(Ps2KeyValue == key_value); // 直到按键被释放
+        Ps2KeyValue = KeyValue_Null; // 娓呯┖鎸夐敭鍊�
+        delay_ms(30);                // 绛夊緟30ms
+    } while(Ps2KeyValue == key_value); // 鐩村埌鎸夐敭琚噴鏀�
 }
 
-/************************* 超声波硬件驱动核心层 *************************/
+/************************* 瓒呭０娉㈢‖浠堕┍鍔ㄦ牳蹇冨眰 *************************/
 /**
- * @brief TIM5定时器初始化：微秒级高精度计时
- * @note 选用TIM5原因：STM32F4 32位通用定时器，计数范围0~4294967295，远距离测距不会溢出
- *       APB1时钟 = 84MHz，预分频84-1，定时器计数频率 = 1MHz → 1计数值 = 1μs
+ * @brief TIM5瀹氭椂鍣ㄥ垵濮嬪寲锛氬井绉掔骇楂樼簿搴﹁鏃�
+ * @note 閫夌敤TIM5鍘熷洜锛歋TM32F4 32浣嶉€氱敤瀹氭椂鍣紝璁℃暟鑼冨洿0~4294967295锛岃繙璺濈娴嬭窛涓嶄細婧㈠嚭
+ *       APB1鏃堕挓 = 84MHz锛岄鍒嗛84-1锛屽畾鏃跺櫒璁℃暟棰戠巼 = 1MHz 鈫� 1璁℃暟鍊� = 1渭s
  */
 static void Ultrasonic_Timer_Init(void)
 {
     TIM_TimeBaseInitTypeDef tim_base;
-    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM5, ENABLE);  // 使能TIM5时钟
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM5, ENABLE);  // 浣胯兘TIM5鏃堕挓
     TIM_TimeBaseStructInit(&tim_base);
 
-    tim_base.TIM_Prescaler = 84 - 1;                      // 预分频 84分频 → 1MHz
-    tim_base.TIM_CounterMode = TIM_CounterMode_Up;       // 向上计数
-    tim_base.TIM_Period = 0xFFFFFFFFU;                   // 最大自动重载值，超长计时不溢出
-    tim_base.TIM_ClockDivision = TIM_CKD_DIV1;            // 不分频
+    tim_base.TIM_Prescaler = 84 - 1;                      // 棰勫垎棰� 84鍒嗛 鈫� 1MHz
+    tim_base.TIM_CounterMode = TIM_CounterMode_Up;       // 鍚戜笂璁℃暟
+    tim_base.TIM_Period = 0xFFFFFFFFU;                   // 鏈€澶ц嚜鍔ㄩ噸杞藉€硷紝瓒呴暱璁℃椂涓嶆孩鍑�
+    tim_base.TIM_ClockDivision = TIM_CKD_DIV1;            // 涓嶅垎棰�
 
     TIM_TimeBaseInit(TIM5, &tim_base);
-    TIM_Cmd(TIM5, ENABLE);  // 定时器持续开启，全程作为微秒计时器
+    TIM_Cmd(TIM5, ENABLE);  // 瀹氭椂鍣ㄦ寔缁紑鍚紝鍏ㄧ▼浣滀负寰璁℃椂鍣�
 }
 
 /**
- * @brief 回波引脚 + 外部中断初始化
- * @note 引脚：PC0 浮空输入
- *       中断：EXTI0 双边沿触发(上升沿+下降沿)，用于捕获完整回波脉冲宽度
- *       双边沿触发原因：需要同时获得上升沿和下降沿时间，才能计算脉冲中心(波峰)
+ * @brief 鍥炴尝寮曡剼 + 澶栭儴涓柇鍒濆鍖�
+ * @note 寮曡剼锛歅C0 娴┖杈撳叆
+ *       涓柇锛欵XTI0 鍙岃竟娌胯Е鍙�(涓婂崌娌�+涓嬮檷娌�)锛岀敤浜庢崟鑾峰畬鏁村洖娉㈣剦鍐插搴�
+ *       鍙岃竟娌胯Е鍙戝師鍥狅細闇€瑕佸悓鏃惰幏寰椾笂鍗囨部鍜屼笅闄嶆部鏃堕棿锛屾墠鑳借绠楄剦鍐蹭腑蹇�(娉㈠嘲)
  */
 static void Ultrasonic_Echo_Init(void)
 {
@@ -408,29 +408,29 @@ static void Ultrasonic_Echo_Init(void)
     EXTI_InitTypeDef exti_init;
     NVIC_InitTypeDef nvic_init;
 
-    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOC, ENABLE);    // 使能GPIOC时钟
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_SYSCFG, ENABLE);  // 使能SYSCFG(外部中断映射)
+    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOC, ENABLE);    // 浣胯兘GPIOC鏃堕挓
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_SYSCFG, ENABLE);  // 浣胯兘SYSCFG(澶栭儴涓柇鏄犲皠)
 
-    // PC0 配置为浮空输入 (由外部超声波模块驱动)
+    // PC0 閰嶇疆涓烘诞绌鸿緭鍏� (鐢卞閮ㄨ秴澹版尝妯″潡椹卞姩)
     GPIO_StructInit(&gpio_init);
     gpio_init.GPIO_Pin = GPIO_Pin_0;
     gpio_init.GPIO_Mode = GPIO_Mode_IN;
     gpio_init.GPIO_PuPd = GPIO_PuPd_NOPULL;
     GPIO_Init(GPIOC, &gpio_init);
 
-    // 将PC0引脚映射到EXTI0中断线
+    // 灏哖C0寮曡剼鏄犲皠鍒癊XTI0涓柇绾�
     SYSCFG_EXTILineConfig(EXTI_PortSourceGPIOC, EXTI_PinSource0);
 
-    // 外部中断配置：双边沿触发
+    // 澶栭儴涓柇閰嶇疆锛氬弻杈规部瑙﹀彂
     EXTI_StructInit(&exti_init);
     exti_init.EXTI_Line = EXTI_Line0;
     exti_init.EXTI_Mode = EXTI_Mode_Interrupt;
-    exti_init.EXTI_Trigger = EXTI_Trigger_Rising_Falling;  // 上升沿+下降沿都触发
+    exti_init.EXTI_Trigger = EXTI_Trigger_Rising_Falling;  // 涓婂崌娌�+涓嬮檷娌块兘瑙﹀彂
     exti_init.EXTI_LineCmd = ENABLE;
     EXTI_Init(&exti_init);
-    EXTI_ClearITPendingBit(EXTI_Line0); // 清除初始中断标志
+    EXTI_ClearITPendingBit(EXTI_Line0); // 娓呴櫎鍒濆涓柇鏍囧織
 
-    // NVIC中断优先级配置：优先级较高，避免中断延迟引入微秒级误差
+    // NVIC涓柇浼樺厛绾ч厤缃細浼樺厛绾ц緝楂橈紝閬垮厤涓柇寤惰繜寮曞叆寰绾ц宸�
     nvic_init.NVIC_IRQChannel = EXTI0_IRQn;
     nvic_init.NVIC_IRQChannelPreemptionPriority = 2;
     nvic_init.NVIC_IRQChannelSubPriority = 1;        
@@ -439,71 +439,71 @@ static void Ultrasonic_Echo_Init(void)
 }
 
 /**
- * @brief 设置PGA112程控放大器增益档位
- * @param gain_code 增益编码(0~7)，对应 1,2,4,8,16,32,64,128倍
- * @note 切换增益后设置 g_gain_settle_discard 标志，丢弃首次测量值等待电路稳定
+ * @brief 璁剧疆PGA112绋嬫帶鏀惧ぇ鍣ㄥ鐩婃。浣�
+ * @param gain_code 澧炵泭缂栫爜(0~7)锛屽搴� 1,2,4,8,16,32,64,128鍊�
+ * @note 鍒囨崲澧炵泭鍚庤缃� g_gain_settle_discard 鏍囧織锛屼涪寮冮娆℃祴閲忓€肩瓑寰呯數璺ǔ瀹�
  */
 static void Ultrasonic_ApplyGain(uint8_t gain_code)
 {
-    gain_code &= 0x07U;  // 掩码限制范围，防止非法编码
+    gain_code &= 0x07U;  // 鎺╃爜闄愬埗鑼冨洿锛岄槻姝㈤潪娉曠紪鐮�
     if(gain_code != g_ultrasonic_gain_code)
     {
-        PGA112_SetGainCode(gain_code);               // 硬件设置增益 (通过SPI)
+        PGA112_SetGainCode(gain_code);               // 纭欢璁剧疆澧炵泭 (閫氳繃SPI)
         g_ultrasonic_gain_code = gain_code;
-        g_gain_settle_discard = 1;                   // 标记：增益切换后电路震荡，丢弃首次测量值
+        g_gain_settle_discard = 1;                   // 鏍囪锛氬鐩婂垏鎹㈠悗鐢佃矾闇囪崱锛屼涪寮冮娆℃祴閲忓€�
     }
 }
 
 /**
- * @brief 根据历史回波时间(距离)自适应选择增益档位
- * @note 原理：超声波远距离信号衰减严重，距离越远，所需放大倍数越大
- *       依据经验阈值划分8档，保证回波信号幅度适中
- * @param echo_us 历史回波时间 (μs)
- * @return PGA增益编码 (0~7)
+ * @brief 鏍规嵁鍘嗗彶鍥炴尝鏃堕棿(璺濈)鑷€傚簲閫夋嫨澧炵泭妗ｄ綅
+ * @note 鍘熺悊锛氳秴澹版尝杩滆窛绂讳俊鍙疯“鍑忎弗閲嶏紝璺濈瓒婅繙锛屾墍闇€鏀惧ぇ鍊嶆暟瓒婂ぇ
+ *       渚濇嵁缁忛獙闃堝€煎垝鍒�8妗ｏ紝淇濊瘉鍥炴尝淇″彿骞呭害閫備腑
+ * @param echo_us 鍘嗗彶鍥炴尝鏃堕棿 (渭s)
+ * @return PGA澧炵泭缂栫爜 (0~7)
  */
 static uint8_t Ultrasonic_SelectGainCode(uint32_t echo_us)
 {
-    if(echo_us < 180U)       return PGA112_GAIN_1;    // 极近：不放大
+    if(echo_us < 180U)       return PGA112_GAIN_1;    // 鏋佽繎锛氫笉鏀惧ぇ
     if(echo_us < 360U)       return PGA112_GAIN_2;    
     if(echo_us < 800U)       return PGA112_GAIN_4;    
     if(echo_us < 1800U)      return PGA112_GAIN_8;    
-    if(echo_us < 3600U)      return PGA112_GAIN_16;   // 中远距离开始放大
+    if(echo_us < 3600U)      return PGA112_GAIN_16;   // 涓繙璺濈寮€濮嬫斁澶�
     if(echo_us < 6500U)      return PGA112_GAIN_32;   
     if(echo_us < 9500U)      return PGA112_GAIN_64;   
-    return PGA112_GAIN_128;                           // 极限距离：最大128倍放大
+    return PGA112_GAIN_128;                           // 鏋侀檺璺濈锛氭渶澶�128鍊嶆斁澶�
 }
 
 /**
- * @brief 计算回波脉冲中心点(波峰)时间
- * @note 原理：超声波回波经检波后输出为方波，信号能量峰值出现在方波中心
- *       使用中心时刻代替边沿，可以提高测距精度，减小脉宽带来的误差
- * @param rise_us 上升沿时间 (μs)
- * @param fall_us 下降沿时间 (μs)
- * @return 波峰对应微秒时间
+ * @brief 璁＄畻鍥炴尝鑴夊啿涓績鐐�(娉㈠嘲)鏃堕棿
+ * @note 鍘熺悊锛氳秴澹版尝鍥炴尝缁忔娉㈠悗杈撳嚭涓烘柟娉紝淇″彿鑳介噺宄板€煎嚭鐜板湪鏂规尝涓績
+ *       浣跨敤涓績鏃跺埢浠ｆ浛杈规部锛屽彲浠ユ彁楂樻祴璺濈簿搴︼紝鍑忓皬鑴夊甯︽潵鐨勮宸�
+ * @param rise_us 涓婂崌娌挎椂闂� (渭s)
+ * @param fall_us 涓嬮檷娌挎椂闂� (渭s)
+ * @return 娉㈠嘲瀵瑰簲寰鏃堕棿
  */
 static uint32_t Ultrasonic_EstimatePeakTime(uint32_t rise_us, uint32_t fall_us)
 {
     uint32_t width;
-    // 异常保护：下降沿小于上升沿(计数器溢出/干扰)，直接返回上升沿
+    // 寮傚父淇濇姢锛氫笅闄嶆部灏忎簬涓婂崌娌�(璁℃暟鍣ㄦ孩鍑�/骞叉壈)锛岀洿鎺ヨ繑鍥炰笂鍗囨部
     if(fall_us <= rise_us)
     {
         return rise_us;
     }
     width = fall_us - rise_us;
-    return rise_us + width / 2U; // 取脉冲中心
+    return rise_us + width / 2U; // 鍙栬剦鍐蹭腑蹇�
 }
 
 /**
- * @brief 自适应增益准备：测量失败时逐级抬升增益
- * @param retry_count 失败重试次数 (0~3)
- * @note 基于上一次有效回波时间选择基础增益，若连续失败则额外增加增益档位
+ * @brief 鑷€傚簲澧炵泭鍑嗗锛氭祴閲忓け璐ユ椂閫愮骇鎶崌澧炵泭
+ * @param retry_count 澶辫触閲嶈瘯娆℃暟 (0~3)
+ * @note 鍩轰簬涓婁竴娆℃湁鏁堝洖娉㈡椂闂撮€夋嫨鍩虹澧炵泭锛岃嫢杩炵画澶辫触鍒欓澶栧鍔犲鐩婃。浣�
  */
 static void Ultrasonic_PrepareGain(uint8_t retry_count)
 {
-    // 基于上一次有效距离选择基础增益
+    // 鍩轰簬涓婁竴娆℃湁鏁堣窛绂婚€夋嫨鍩虹澧炵泭
     uint8_t gain_code = Ultrasonic_SelectGainCode(g_last_echo_us);
 
-    // 连续测量失败，逐级增加增益 (每次失败提升一档)
+    // 杩炵画娴嬮噺澶辫触锛岄€愮骇澧炲姞澧炵泭 (姣忔澶辫触鎻愬崌涓€妗�)
     if(retry_count > ULTRASONIC_GAIN_RETRY_MAX)
     {
         retry_count = ULTRASONIC_GAIN_RETRY_MAX;
@@ -512,17 +512,17 @@ static void Ultrasonic_PrepareGain(uint8_t retry_count)
 
     if(gain_code > PGA112_GAIN_128)
     {
-        gain_code = PGA112_GAIN_128; // 限制最大增益
+        gain_code = PGA112_GAIN_128; // 闄愬埗鏈€澶у鐩�
     }
     Ultrasonic_ApplyGain(gain_code);
-    delay_us(20); // 等待SPI配置+运放电路稳定 (约20μs)
+    delay_us(20); // 绛夊緟SPI閰嶇疆+杩愭斁鐢佃矾绋冲畾 (绾�20渭s)
 }
 
 /**
- * @brief 设置回波有效接收时间窗口，过滤窗口外干扰信号
- * @param min_us 窗口下限 (μs)
- * @param max_us 窗口上限 (μs)
- * @note 若参数无效则恢复全范围窗口
+ * @brief 璁剧疆鍥炴尝鏈夋晥鎺ユ敹鏃堕棿绐楀彛锛岃繃婊ょ獥鍙ｅ骞叉壈淇″彿
+ * @param min_us 绐楀彛涓嬮檺 (渭s)
+ * @param max_us 绐楀彛涓婇檺 (渭s)
+ * @note 鑻ュ弬鏁版棤鏁堝垯鎭㈠鍏ㄨ寖鍥寸獥鍙�
  */
 static void Ultrasonic_SetAcceptWindow(uint32_t min_us, uint32_t max_us)
 {
@@ -536,45 +536,45 @@ static void Ultrasonic_SetAcceptWindow(uint32_t min_us, uint32_t max_us)
 }
 
 /**
- * @brief 动态设置跟踪窗口：锁定目标后缩小窗口、丢失目标后全域搜索
- * @note 跟踪窗口利用目标空间相关性，在历史值附近开窄窗口，提高抗干扰能力
- *       若连续丢失目标则扩大窗口重新捕获
+ * @brief 鍔ㄦ€佽缃窡韪獥鍙ｏ細閿佸畾鐩爣鍚庣缉灏忕獥鍙ｃ€佷涪澶辩洰鏍囧悗鍏ㄥ煙鎼滅储
+ * @note 璺熻釜绐楀彛鍒╃敤鐩爣绌洪棿鐩稿叧鎬э紝鍦ㄥ巻鍙插€奸檮杩戝紑绐勭獥鍙ｏ紝鎻愰珮鎶楀共鎵拌兘鍔�
+ *       鑻ヨ繛缁涪澶辩洰鏍囧垯鎵╁ぇ绐楀彛閲嶆柊鎹曡幏
  */
 static void Ultrasonic_SetTrackingWindow(void)
 {
     const uint32_t margin_us = ULTRASONIC_TRACK_MARGIN_US;
     if(g_reacquire_ignore_near != 0U)
     {
-        // 重搜索模式：屏蔽近距离 (避开盲区)，从最小有效远距离开始搜索
+        // 閲嶆悳绱㈡ā寮忥細灞忚斀杩戣窛绂� (閬垮紑鐩插尯)锛屼粠鏈€灏忔湁鏁堣繙璺濈寮€濮嬫悳绱�
         Ultrasonic_SetAcceptWindow(ULTRASONIC_REACQUIRE_MIN_US, ULTRASONIC_TIMEOUT_US);
     }
     else if(g_tracking_valid == 0U)
     {
-        // 未锁定目标：全开窗口，全域搜索
+        // 鏈攣瀹氱洰鏍囷細鍏ㄥ紑绐楀彛锛屽叏鍩熸悳绱�
         Ultrasonic_SetAcceptWindow(0, ULTRASONIC_TIMEOUT_US);
     }
     else if(g_last_echo_us > margin_us)
     {
-        // 已锁定且历史值大于余量：以历史值为中心，左右扩展余量，窄窗口跟踪
+        // 宸查攣瀹氫笖鍘嗗彶鍊煎ぇ浜庝綑閲忥細浠ュ巻鍙插€间负涓績锛屽乏鍙虫墿灞曚綑閲忥紝绐勭獥鍙ｈ窡韪�
         Ultrasonic_SetAcceptWindow(g_last_echo_us - margin_us, g_last_echo_us + margin_us);
     }
     else
     {
-        // 近距离目标：下限设为盲区 (避免自激)，上限为历史值+余量
+        // 杩戣窛绂荤洰鏍囷細涓嬮檺璁句负鐩插尯 (閬垮厤鑷縺)锛屼笂闄愪负鍘嗗彶鍊�+浣欓噺
         Ultrasonic_SetAcceptWindow(ULTRASONIC_BLANKING_US, g_last_echo_us + margin_us);
     }
 }
 
 /**
- * @brief 单次超声波发射+回波捕获 (物理层)
- * @param echo_us 输出：本次回波时间 (μs)
- * @return 1=捕获成功 0=超时失败
- * @note 阻塞轮询等待回波，超时时间 ULTRASONIC_TIMEOUT_US
+ * @brief 鍗曟瓒呭０娉㈠彂灏�+鍥炴尝鎹曡幏 (鐗╃悊灞�)
+ * @param echo_us 杈撳嚭锛氭湰娆″洖娉㈡椂闂� (渭s)
+ * @return 1=鎹曡幏鎴愬姛 0=瓒呮椂澶辫触
+ * @note 闃诲杞绛夊緟鍥炴尝锛岃秴鏃舵椂闂� ULTRASONIC_TIMEOUT_US
  */
 static uint8_t Ultrasonic_MeasureOnce(uint32_t *echo_us)
 {
     uint32_t timeout;
-    // 1. 复位所有中断状态标志
+    // 1. 澶嶄綅鎵€鏈変腑鏂姸鎬佹爣蹇�
     g_echo_captured = 0;
     g_measure_active = 1;
     g_echo_time_us = 0;
@@ -582,106 +582,106 @@ static uint8_t Ultrasonic_MeasureOnce(uint32_t *echo_us)
     g_echo_fall_us = 0;
     g_echo_rise_seen = 0;
 
-    // 2. 清空定时器计数值 + 清除中断挂起 (确保从0开始计时)
+    // 2. 娓呯┖瀹氭椂鍣ㄨ鏁板€� + 娓呴櫎涓柇鎸傝捣 (纭繚浠�0寮€濮嬭鏃�)
     TIM_SetCounter(TIM5, 0);
     EXTI_ClearITPendingBit(EXTI_Line0);
 
-    // 3. 驱动探头发射一组40kHz超声波脉冲串 (通常8个脉冲)
+    // 3. 椹卞姩鎺㈠ご鍙戝皠涓€缁�40kHz瓒呭０娉㈣剦鍐蹭覆 (閫氬父8涓剦鍐�)
     Ultrasonic_FireBurst();
 
-    // 4. 阻塞轮询等待回波，超时则退出
+    // 4. 闃诲杞绛夊緟鍥炴尝锛岃秴鏃跺垯閫€鍑�
     for(timeout = 0; timeout < ULTRASONIC_TIMEOUT_US / 10U; timeout++)
     {
         if(g_echo_captured != 0U)
         {
             *echo_us = g_echo_time_us;
-            g_measure_active = 0; // 关闭测量窗口
+            g_measure_active = 0; // 鍏抽棴娴嬮噺绐楀彛
             return 1;
         }
         delay_us(10);
     }
 
-    // 超时失败
+    // 瓒呮椂澶辫触
     g_measure_active = 0;
     return 0;
 }
 
 /**
- * @brief 带多级滤波的批量测量：采样+增益自适应+聚类降噪
- * @param echo_us 输出最终有效回波时间 (μs)
- * @return 1=采样成功 0=全部失败
- * @note 算法流程：
- *       1. 自适应增益调整
- *       2. 连续采集 ULTRASONIC_FILTER_SAMPLES 个有效样本
- *       3. 插入排序
- *       4. 寻找最密集样本簇 (容忍 ±90μs 波动)
- *       5. 取簇中位数作为最终结果
+ * @brief 甯﹀绾ф护娉㈢殑鎵归噺娴嬮噺锛氶噰鏍�+澧炵泭鑷€傚簲+鑱氱被闄嶅櫔
+ * @param echo_us 杈撳嚭鏈€缁堟湁鏁堝洖娉㈡椂闂� (渭s)
+ * @return 1=閲囨牱鎴愬姛 0=鍏ㄩ儴澶辫触
+ * @note 绠楁硶娴佺▼锛�
+ *       1. 鑷€傚簲澧炵泭璋冩暣
+ *       2. 杩炵画閲囬泦 ULTRASONIC_FILTER_SAMPLES 涓湁鏁堟牱鏈�
+ *       3. 鎻掑叆鎺掑簭
+ *       4. 瀵绘壘鏈€瀵嗛泦鏍锋湰绨� (瀹瑰繊 卤90渭s 娉㈠姩)
+ *       5. 鍙栫皣涓綅鏁颁綔涓烘渶缁堢粨鏋�
  */
 static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us)
 {
-    uint32_t samples[ULTRASONIC_FILTER_SAMPLES]; // 采样缓冲区
-    uint8_t valid_count = 0;                     // 有效样本计数
-    uint8_t attempts = 0;                        // 总发射次数 (防止无限循环)
-    uint8_t gain_retry = 0;                      // 增益重试计数
-    uint8_t miss_count = 0;                      // 连续丢失回波计数
+    uint32_t samples[ULTRASONIC_FILTER_SAMPLES]; // 閲囨牱缂撳啿鍖�
+    uint8_t valid_count = 0;                     // 鏈夋晥鏍锋湰璁℃暟
+    uint8_t attempts = 0;                        // 鎬诲彂灏勬鏁� (闃叉鏃犻檺寰幆)
+    uint8_t gain_retry = 0;                      // 澧炵泭閲嶈瘯璁℃暟
+    uint8_t miss_count = 0;                      // 杩炵画涓㈠け鍥炴尝璁℃暟
     uint8_t index;
     uint32_t reacquire_min_us = ULTRASONIC_REACQUIRE_MIN_US;
 
-    // 校准数据有效时，使用第一校准点时间作为重搜索下限 (更精确)
+    // 鏍″噯鏁版嵁鏈夋晥鏃讹紝浣跨敤绗竴鏍″噯鐐规椂闂翠綔涓洪噸鎼滅储涓嬮檺 (鏇寸簿纭�)
     if((g_calib_valid != 0U) && (g_calib.point_us[0] > reacquire_min_us))
     {
         reacquire_min_us = g_calib.point_us[0];
     }
 
-    // 循环采集，凑够指定数量有效样本，最多允许额外20次发射机会
+    // 寰幆閲囬泦锛屽噾澶熸寚瀹氭暟閲忔湁鏁堟牱鏈紝鏈€澶氬厑璁搁澶�20娆″彂灏勬満浼�
     while(attempts < (ULTRASONIC_FILTER_SAMPLES + 20U) && valid_count < ULTRASONIC_FILTER_SAMPLES)
     {
         uint32_t sample = 0;
-        Ultrasonic_PrepareGain(gain_retry); // 动态配置增益 (根据上次结果和失败次数)
+        Ultrasonic_PrepareGain(gain_retry); // 鍔ㄦ€侀厤缃鐩� (鏍规嵁涓婃缁撴灉鍜屽け璐ユ鏁�)
         attempts++;
 
         if(Ultrasonic_MeasureOnce(&sample) != 0U)
         {
-            // 增益刚切换，电路未稳定，丢弃脏数据
+            // 澧炵泭鍒氬垏鎹紝鐢佃矾鏈ǔ瀹氾紝涓㈠純鑴忔暟鎹�
             if(g_gain_settle_discard != 0U)
             {
                 g_gain_settle_discard = 0;
                 delay_ms(8);
                 continue;
             }
-            // 重搜索模式下屏蔽近距离干扰 (避开盲区)
+            // 閲嶆悳绱㈡ā寮忎笅灞忚斀杩戣窛绂诲共鎵� (閬垮紑鐩插尯)
             if((g_reacquire_ignore_near != 0U) && (sample < reacquire_min_us))
             {
                 continue;
             }
-            // 存入有效样本
+            // 瀛樺叆鏈夋晥鏍锋湰
             samples[valid_count++] = sample;
-            g_last_echo_us = sample;         // 更新历史值
-            gain_retry = 0;                  // 成功则清除重试计数
+            g_last_echo_us = sample;         // 鏇存柊鍘嗗彶鍊�
+            gain_retry = 0;                  // 鎴愬姛鍒欐竻闄ら噸璇曡鏁�
             miss_count = 0;
-            g_reacquire_ignore_near = 0U;    // 成功捕获后退出重搜索模式
+            g_reacquire_ignore_near = 0U;    // 鎴愬姛鎹曡幏鍚庨€€鍑洪噸鎼滅储妯″紡
         }
         else
         {
-            // 单次测量失败处理
+            // 鍗曟娴嬮噺澶辫触澶勭悊
             if(g_gain_settle_discard != 0U)
             {
                 g_gain_settle_discard = 0;
             }
             else
             {
-                // 未超限则提升增益重试 (逐级增加)
+                // 鏈秴闄愬垯鎻愬崌澧炵泭閲嶈瘯 (閫愮骇澧炲姞)
                 if(gain_retry < ULTRASONIC_GAIN_RETRY_MAX)
                 {
                     gain_retry++;
                 }
-                // 连续丢失回波，判定目标丢失，进入全域重搜索
+                // 杩炵画涓㈠け鍥炴尝锛屽垽瀹氱洰鏍囦涪澶憋紝杩涘叆鍏ㄥ煙閲嶆悳绱�
                 if(g_tracking_valid != 0U)
                 {
                     miss_count++;
                     if(miss_count >= ULTRASONIC_REACQUIRE_MISSES)
                     {
-                        // 重置所有状态，扩大搜索窗口
+                        // 閲嶇疆鎵€鏈夌姸鎬侊紝鎵╁ぇ鎼滅储绐楀彛
                         valid_count = 0U;
                         miss_count = 0U;
                         g_tracking_valid = 0U;
@@ -693,18 +693,18 @@ static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us)
                 }
             }
         }
-        delay_ms(8); // 降低发射占空比，防止声波叠加形成驻波干扰
+        delay_ms(8); // 闄嶄綆鍙戝皠鍗犵┖姣旓紝闃叉澹版尝鍙犲姞褰㈡垚椹绘尝骞叉壈
     }
 
     if(valid_count == 0U)
     {
-        return 0; // 无有效样本，测量失败
+        return 0; // 鏃犳湁鏁堟牱鏈紝娴嬮噺澶辫触
     }
 
-    // 样本排序 (升序)
+    // 鏍锋湰鎺掑簭 (鍗囧簭)
     Sort_Samples(samples, valid_count);
 
-    // 聚类算法：选取最密集样本簇的中间值作为最终结果，剔除跳变干扰
+    // 鑱氱被绠楁硶锛氶€夊彇鏈€瀵嗛泦鏍锋湰绨囩殑涓棿鍊间綔涓烘渶缁堢粨鏋滐紝鍓旈櫎璺冲彉骞叉壈
     if(valid_count >= 3U)
     {
         uint8_t best_start = 0U;
@@ -736,7 +736,7 @@ static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us)
     }
     else
     {
-        // 样本较少，直接取中间值
+        // 鏍锋湰杈冨皯锛岀洿鎺ュ彇涓棿鍊�
         *echo_us = samples[valid_count / 2U];
     }
 
@@ -745,9 +745,9 @@ static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us)
 }
 
 /**
- * @brief 插入排序：对采样数组升序排列，用于后续聚类、去极值
- * @param data 待排序数组
- * @param length 数组长度
+ * @brief 鎻掑叆鎺掑簭锛氬閲囨牱鏁扮粍鍗囧簭鎺掑垪锛岀敤浜庡悗缁仛绫汇€佸幓鏋佸€�
+ * @param data 寰呮帓搴忔暟缁�
+ * @param length 鏁扮粍闀垮害
  */
 static void Sort_Samples(uint32_t *data, uint8_t length)
 {
@@ -756,7 +756,7 @@ static void Sort_Samples(uint32_t *data, uint8_t length)
     {
         uint32_t key = data[i];
         int8_t j = (int8_t)i - 1;
-        // 向前移位，找到插入位置
+        // 鍚戝墠绉讳綅锛屾壘鍒版彃鍏ヤ綅缃�
         while(j >= 0 && data[j] > key)
         {
             data[j + 1] = data[j];
@@ -766,53 +766,53 @@ static void Sort_Samples(uint32_t *data, uint8_t length)
     }
 }
 
-/************************* 校准与距离转换数据层 *************************/
+/************************* 鏍″噯涓庤窛绂昏浆鎹㈡暟鎹眰 *************************/
 /**
- * @brief 从Flash指定地址读取校准数据到RAM
- * @note 直接指针强制转换读取，不经过缓存，读取后自动校验合法性
+ * @brief 浠嶧lash鎸囧畾鍦板潃璇诲彇鏍″噯鏁版嵁鍒癛AM
+ * @note 鐩存帴鎸囬拡寮哄埗杞崲璇诲彇锛屼笉缁忚繃缂撳瓨锛岃鍙栧悗鑷姩鏍￠獙鍚堟硶鎬�
  */
 static void Calibration_Load(void)
 {
-    // 地址强制转为结构体指针，直接读取Flash数据
+    // 鍦板潃寮哄埗杞负缁撴瀯浣撴寚閽堬紝鐩存帴璇诲彇Flash鏁版嵁
     const UltrasonicCalibData *stored = (const UltrasonicCalibData *)ULTRASONIC_FLASH_ADDR;
     g_calib = *stored; 
-    g_calib_valid = Calibration_IsValid(&g_calib); // 校验数据合法性
+    g_calib_valid = Calibration_IsValid(&g_calib); // 鏍￠獙鏁版嵁鍚堟硶鎬�
 }
 
 /**
- * @brief 校验校准数据是否合法：魔数、版本、时序逻辑校验
- * @param calib 待校验结构体
- * @return 1=合法 0=非法
+ * @brief 鏍￠獙鏍″噯鏁版嵁鏄惁鍚堟硶锛氶瓟鏁般€佺増鏈€佹椂搴忛€昏緫鏍￠獙
+ * @param calib 寰呮牎楠岀粨鏋勪綋
+ * @return 1=鍚堟硶 0=闈炴硶
  */
 static uint8_t Calibration_IsValid(const UltrasonicCalibData *calib)
 {
     uint8_t index;
-    // 1. 魔数+版本校验 (防止读取到随机Flash内容)
+    // 1. 榄旀暟+鐗堟湰鏍￠獙 (闃叉璇诲彇鍒伴殢鏈篎lash鍐呭)
     if(calib->magic != ULTRASONIC_FLASH_MAGIC || calib->version != ULTRASONIC_FLASH_VERSION)
     {
         return 0;
     }
-    // 2. 物理逻辑校验：距离越远，回波时间必须单调递增，且不超过最大量程
+    // 2. 鐗╃悊閫昏緫鏍￠獙锛氳窛绂昏秺杩滐紝鍥炴尝鏃堕棿蹇呴』鍗曡皟閫掑锛屼笖涓嶈秴杩囨渶澶ч噺绋�
     for(index = 0; index < 5U; index++)
     {
         if(calib->point_us[index] == 0U || calib->point_us[index] > ULTRASONIC_TIMEOUT_US)
         {
-            return 0; // 时间超出合法范围
+            return 0; // 鏃堕棿瓒呭嚭鍚堟硶鑼冨洿
         }
         if(index > 0U && calib->point_us[index] <= calib->point_us[index - 1U])
         {
-            return 0; // 非单调递增 (物理上不可能)
+            return 0; // 闈炲崟璋冮€掑 (鐗╃悊涓婁笉鍙兘)
         }
     }
     return 1;  
 }
 
 /**
- * @brief 将校准数据写入Flash Sector11
- * @param calib 待写入校准结构体
- * @return 1=写入成功 0=失败
- * @note Flash特性：只能擦除(写入1)和编程(写入0)，不能单独改写字节；擦除按扇区操作
- *       Sector11大小为128KB，地址范围 0x080E0000 - 0x080FFFFF
+ * @brief 灏嗘牎鍑嗘暟鎹啓鍏lash Sector11
+ * @param calib 寰呭啓鍏ユ牎鍑嗙粨鏋勪綋
+ * @return 1=鍐欏叆鎴愬姛 0=澶辫触
+ * @note Flash鐗规€э細鍙兘鎿﹂櫎(鍐欏叆1)鍜岀紪绋�(鍐欏叆0)锛屼笉鑳藉崟鐙敼鍐欏瓧鑺傦紱鎿﹂櫎鎸夋墖鍖烘搷浣�
+ *       Sector11澶у皬涓�128KB锛屽湴鍧€鑼冨洿 0x080E0000 - 0x080FFFFF
  */
 static uint8_t Calibration_Save(const UltrasonicCalibData *calib)
 {
@@ -821,16 +821,16 @@ static uint8_t Calibration_Save(const UltrasonicCalibData *calib)
     uint32_t address = ULTRASONIC_FLASH_ADDR;
     uint32_t index;
 
-    FLASH_Unlock(); // 解锁Flash写保护
-    // 清除Flash错误标志 (为上一步可能的错误清理)
+    FLASH_Unlock(); // 瑙ｉ攣Flash鍐欎繚鎶�
+    // 娓呴櫎Flash閿欒鏍囧織 (涓轰笂涓€姝ュ彲鑳界殑閿欒娓呯悊)
     FLASH_ClearFlag(FLASH_FLAG_EOP | FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR |
                     FLASH_FLAG_PGAERR | FLASH_FLAG_PGPERR | FLASH_FLAG_PGSERR);
 
-    // 整扇区擦除 (所有位变为1)
+    // 鏁存墖鍖烘摝闄� (鎵€鏈変綅鍙樹负1)
     status = FLASH_EraseSector(FLASH_Sector_11, VoltageRange_3);
     if(status == FLASH_COMPLETE)
     {
-        // 按32bit字逐字写入 (结构体大小32字节，共8个字)
+        // 鎸�32bit瀛楅€愬瓧鍐欏叆 (缁撴瀯浣撳ぇ灏�32瀛楄妭锛屽叡8涓瓧)
         for(index = 0; index < (sizeof(UltrasonicCalibData) / 4U); index++)
         {
             status = FLASH_ProgramWord(address, words[index]);
@@ -841,15 +841,15 @@ static uint8_t Calibration_Save(const UltrasonicCalibData *calib)
             address += 4U;
         }
     }
-    FLASH_Lock(); // 重新上锁保护Flash
+    FLASH_Lock(); // 閲嶆柊涓婇攣淇濇姢Flash
 
     return (uint8_t)(status == FLASH_COMPLETE); 
 }
 
 /**
- * @brief 校准时根据标准距离设置专属接收窗口，提高标定精度
- * @param distance_mm 当前标定标准距离 (mm)
- * @note 通过限制窗口范围，避免校准时采集到多径干扰或邻近物体回波
+ * @brief 鏍″噯鏃舵牴鎹爣鍑嗚窛绂昏缃笓灞炴帴鏀剁獥鍙ｏ紝鎻愰珮鏍囧畾绮惧害
+ * @param distance_mm 褰撳墠鏍囧畾鏍囧噯璺濈 (mm)
+ * @note 閫氳繃闄愬埗绐楀彛鑼冨洿锛岄伩鍏嶆牎鍑嗘椂閲囬泦鍒板寰勫共鎵版垨閭昏繎鐗╀綋鍥炴尝
  */
 static void Calibration_SetMeasureWindow(uint16_t distance_mm)
 {
@@ -877,41 +877,41 @@ static void Calibration_SetMeasureWindow(uint16_t distance_mm)
 }
 
 /**
- * @brief 无校准数据时，使用理想物理公式计算距离 (回退方案)
- * @param echo_us 回波时间(μs)
- * @return 计算距离(mm)
- * @note 理论公式：距离(mm) = 时间(μs) * 0.1715
- *       实际使用 0.164866 系数是为了适配HC-SR04模块的常见偏差
+ * @brief 鏃犳牎鍑嗘暟鎹椂锛屼娇鐢ㄧ悊鎯崇墿鐞嗗叕寮忚绠楄窛绂� (鍥為€€鏂规)
+ * @param echo_us 鍥炴尝鏃堕棿(渭s)
+ * @return 璁＄畻璺濈(mm)
+ * @note 鐞嗚鍏紡锛氳窛绂�(mm) = 鏃堕棿(渭s) * 0.1715
+ *       瀹為檯浣跨敤 0.164866 绯绘暟鏄负浜嗛€傞厤HC-SR04妯″潡鐨勫父瑙佸亸宸�
  */
 static float Convert_Time_To_Distance_Default(uint32_t echo_us)
 {
     float distance = (float)echo_us * 0.164866f;
-    // 限幅到量程范围 10mm ~ 1300mm
+    // 闄愬箙鍒伴噺绋嬭寖鍥� 10mm ~ 1300mm
     if(distance < 10.0f) distance = 10.0f;
     if(distance > 1300.0f) distance = 1300.0f;
     return distance;
 }
 
 /**
- * @brief 分段线性插值距离换算 (使用校准数据，修正系统误差)
- * @param echo_us 回波时间(μs)
- * @return 修正后距离(mm)
- * @note 原理：将全量程分为多段直线，用标定点拟合非线性误差
- *       例如：使用5个标定点，分成4段直线，两点式插值
+ * @brief 鍒嗘绾挎€ф彃鍊艰窛绂绘崲绠� (浣跨敤鏍″噯鏁版嵁锛屼慨姝ｇ郴缁熻宸�)
+ * @param echo_us 鍥炴尝鏃堕棿(渭s)
+ * @return 淇鍚庤窛绂�(mm)
+ * @note 鍘熺悊锛氬皢鍏ㄩ噺绋嬪垎涓哄娈电洿绾匡紝鐢ㄦ爣瀹氱偣鎷熷悎闈炵嚎鎬ц宸�
+ *       渚嬪锛氫娇鐢�5涓爣瀹氱偣锛屽垎鎴�4娈电洿绾匡紝涓ょ偣寮忔彃鍊�
  */
 static float Convert_Time_To_Distance(uint32_t echo_us)
 {
     uint8_t index;
-    float x0, x1;  // 横坐标：实际测量回波时间 (μs)
-    float y0, y1;  // 纵坐标：标准物理距离 (mm)
+    float x0, x1;  // 妯潗鏍囷細瀹為檯娴嬮噺鍥炴尝鏃堕棿 (渭s)
+    float y0, y1;  // 绾靛潗鏍囷細鏍囧噯鐗╃悊璺濈 (mm)
     float distance;
 
     if(g_calib_valid == 0U)
     {
-        return Convert_Time_To_Distance_Default(echo_us); // 无校准则用理想公式
+        return Convert_Time_To_Distance_Default(echo_us); // 鏃犳牎鍑嗗垯鐢ㄧ悊鎯冲叕寮�
     }
 
-    // 根据回波时间判断落在哪一段折线区间内
+    // 鏍规嵁鍥炴尝鏃堕棿鍒ゆ柇钀藉湪鍝竴娈垫姌绾垮尯闂村唴
     index = 0U;
     while((index < 3U) && (echo_us > g_calib.point_us[index + 1U]))
     {
@@ -923,97 +923,114 @@ static float Convert_Time_To_Distance(uint32_t echo_us)
     y0 = (float)k_calib_distance_mm[index];
     y1 = (float)k_calib_distance_mm[index + 1U];
 
-    if(x1 <= x0) // 防除零保护
+    if(x1 <= x0) // 闃查櫎闆朵繚鎶�
     {
         return Convert_Time_To_Distance_Default(echo_us);
     }
 
-    // 两点式直线插值: y = y0 + (x - x0)*(y1 - y0)/(x1 - x0)
+    // 涓ょ偣寮忕洿绾挎彃鍊�: y = y0 + (x - x0)*(y1 - y0)/(x1 - x0)
     distance = y0 + ((float)echo_us - x0) * (y1 - y0) / (x1 - x0);
 
-    // 限幅到有效量程
+    // 闄愬箙鍒版湁鏁堥噺绋�
     if(distance < (float)k_calib_distance_mm[0]) distance = (float)k_calib_distance_mm[0];
     if(distance > 1300.0f) distance = 1300.0f;
     return distance;
 }
 
-/************************* 菜单逻辑交互层 *************************/
+/************************* 鑿滃崟閫昏緫浜や簰灞� *************************/
 /**
- * @brief 实时测量界面业务逻辑
- * @note 循环调用滤波测距函数，实时显示时间、距离、校准状态、增益等
- *       按返回键退出到主菜单
+ * @brief 鎵嬪姩娴嬮噺鐣岄潰涓氬姟閫昏緫
+ * @note 鎸変竴娆nter瑙﹀彂涓€娆℃护娉㈡祴璺濓紝鏄剧ず鏃堕棿銆佽窛绂汇€佹牎鍑嗙姸鎬併€佸鐩婄瓑
+ *       鎸夎繑鍥為敭閫€鍑哄埌涓昏彍鍗�
  */
 static void MenuHandler_Measure(void)
 {
     char value_text[24];
-    Draw_Work_Title("测量模式");
-    Draw_Key_Tips("确认开始测量", "返回退出测量");
+    Draw_Work_Title("鎵嬪姩娴嬮噺");
+    Draw_Key_Tips("Enter: 娴嬮噺涓€娆�", "Back: 閫€鍑�");
 
     g_tracking_valid = 0;
     g_reacquire_ignore_near = 0U;
 
-    // 固定文本绘制 (标签)
-    OS_String_Show(280, 150, 24, 1, "测量时间(us)");
-    OS_String_Show(280, 180, 24, 1, "测量距离(mm)");
-    OS_String_Show(280, 210, 24, 1, "默认距离(mm)");
-    OS_String_Show(280, 240, 24, 1, "校准状态");
-    OS_String_Show(280, 270, 24, 1, "前端增益(x)");
-    OS_String_Show(280, 300, 24, 1, "提示信息");
+    // 鍥哄畾鏂囨湰缁樺埗 (鏍囩)
+    OS_String_Show(280, 150, 24, 1, "娴嬮噺鏃堕棿(us)");
+    OS_String_Show(280, 180, 24, 1, "娴嬮噺璺濈(mm)");
+    OS_String_Show(280, 210, 24, 1, "榛樿璺濈(mm)");
+    OS_String_Show(280, 240, 24, 1, "鏍″噯鐘舵€�");
+    OS_String_Show(280, 270, 24, 1, "鍓嶇澧炵泭(x)");
+    OS_String_Show(280, 300, 24, 1, "鎻愮ず淇℃伅");
 
-    Show_Text_Value_Only(3, "未校准");
+    Show_Text_Value_Only(0, "-----");
+    Show_Text_Value_Only(1, "------");
+    Show_Text_Value_Only(2, "------");
+    Show_Text_Value_Only(3, (g_calib_valid != 0U) ? "宸叉牎鍑�" : "鏈牎鍑�");
     Show_Text_Value_Only(4, "008");
-    Show_Text_Value_Only(5, "等待开始");
+    Show_Text_Value_Only(5, "绛夊緟Enter");
 
-    // 循环测量，直到按下返回键
-    while(Ps2KeyValue != KeyValue_Back)
+    // 鎵嬪姩娴嬮噺锛氭瘡娆℃寜Enter鍙Е鍙戜竴娆″鏍锋湰婊ゆ尝娴嬮噺锛屼繚鐣欑粨鏋滅洿鍒颁笅涓€娆¤Е鍙�
+    while(1)
     {
         uint32_t echo_us = 0;
-        Ultrasonic_SetTrackingWindow(); // 根据跟踪状态设置接收窗口
 
-        if(Ultrasonic_MeasureFiltered(&echo_us) != 0U)
+        if(Ps2KeyValue == KeyValue_Back)
         {
-            float distance = Convert_Time_To_Distance(echo_us);
-            g_tracking_valid = 1; // 测距成功，标记跟踪有效
-
-            sprintf(value_text, "%05lu", (unsigned long)echo_us);
-            Show_Text_Value_Only(0, value_text);
-
-            sprintf(value_text, "%06.1f", (double)distance);
-            Show_Text_Value_Only(1, value_text);
-
-            sprintf(value_text, "%06.1f", (double)Convert_Time_To_Distance_Default(echo_us));
-            Show_Text_Value_Only(2, value_text);
-
-            Show_Text_Value_Only(3, (g_calib_valid != 0U) ? "已校准" : "未校准");
-            sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
-            Show_Text_Value_Only(4, value_text);
-            Show_Text_Value_Only(5, "测量正常");
+            break;
         }
-        else
+
+        if(Ps2KeyValue == KeyValue_Enter)
         {
-            // 测量失败：进入重搜索模式
-            g_reacquire_ignore_near = 1U;
-            g_tracking_valid = 0;
-            Show_Text_Value_Only(3, "测量失败");
-            sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
-            Show_Text_Value_Only(4, value_text);
-            Show_Text_Value_Only(5, "检查探头");
+            Ps2KeyValue = KeyValue_Null;
+            Show_Text_Value_Only(5, "姝ｅ湪娴嬮噺  ");
+
+            Ultrasonic_SetTrackingWindow(); // 鏍规嵁璺熻釜鐘舵€佽缃帴鏀剁獥鍙�
+
+            if(Ultrasonic_MeasureFiltered(&echo_us) != 0U)
+            {
+                float distance = Convert_Time_To_Distance(echo_us);
+                g_tracking_valid = 1; // 娴嬭窛鎴愬姛锛屾爣璁拌窡韪湁鏁�
+
+                sprintf(value_text, "%05lu", (unsigned long)echo_us);
+                Show_Text_Value_Only(0, value_text);
+
+                sprintf(value_text, "%06.1f", (double)distance);
+                Show_Text_Value_Only(1, value_text);
+
+                sprintf(value_text, "%06.1f", (double)Convert_Time_To_Distance_Default(echo_us));
+                Show_Text_Value_Only(2, value_text);
+
+                Show_Text_Value_Only(3, (g_calib_valid != 0U) ? "宸叉牎鍑�  " : "鏈牎鍑�  ");
+                sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
+                Show_Text_Value_Only(4, value_text);
+                Show_Text_Value_Only(5, "娴嬮噺瀹屾垚  ");
+            }
+            else
+            {
+                // 娴嬮噺澶辫触锛氳繘鍏ラ噸鎼滅储妯″紡
+                g_reacquire_ignore_near = 1U;
+                g_tracking_valid = 0;
+                Show_Text_Value_Only(3, "娴嬮噺澶辫触  ");
+                sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
+                Show_Text_Value_Only(4, value_text);
+                Show_Text_Value_Only(5, "妫€鏌ユ帰澶�  ");
+            }
+            Wait_Ps2KeyRelease(KeyValue_Enter);
         }
-        delay_ms(120); // 120ms 测量周期
+
+        delay_ms(20);
     }
 
     Ps2KeyValue = KeyValue_Null;
-    Change_Menu(0); // 返回主菜单
+    Change_Menu(0); // 杩斿洖涓昏彍鍗�
 }
 
 /**
- * @brief 超声波校准菜单处理函数
- * @details 分步完成5个标准距离点采样、合法性校验、Flash保存校准数据
- *          支持按键确认采样、返回键退出校准流程
- * @note 校准步骤：
- *       1. 在指定距离放置反射板 (依次 100,300,600,900,1300mm)
- *       2. 按确认键进行自动采样
- *       3. 完成全部5点后自动校验并保存至Flash
+ * @brief 瓒呭０娉㈡牎鍑嗚彍鍗曞鐞嗗嚱鏁�
+ * @details 鍒嗘瀹屾垚5涓爣鍑嗚窛绂荤偣閲囨牱銆佸悎娉曟€ф牎楠屻€丗lash淇濆瓨鏍″噯鏁版嵁
+ *          鏀寔鎸夐敭纭閲囨牱銆佽繑鍥為敭閫€鍑烘牎鍑嗘祦绋�
+ * @note 鏍″噯姝ラ锛�
+ *       1. 鍦ㄦ寚瀹氳窛绂绘斁缃弽灏勬澘 (渚濇 100,300,600,900,1300mm)
+ *       2. 鎸夌‘璁ら敭杩涜鑷姩閲囨牱
+ *       3. 瀹屾垚鍏ㄩ儴5鐐瑰悗鑷姩鏍￠獙骞朵繚瀛樿嚦Flash
  */
 static void MenuHandler_Calibrate(void)
 {
@@ -1022,35 +1039,35 @@ static void MenuHandler_Calibrate(void)
     uint8_t last_step = 0xFFU;
     char line[24];
 
-    // 初始化校准数据结构 (写入魔数、版本，清空时间点)
+    // 鍒濆鍖栨牎鍑嗘暟鎹粨鏋� (鍐欏叆榄旀暟銆佺増鏈紝娓呯┖鏃堕棿鐐�)
     new_calib.magic = ULTRASONIC_FLASH_MAGIC;
     new_calib.version = ULTRASONIC_FLASH_VERSION;
     new_calib.point_us[0] = 0; new_calib.point_us[1] = 0;
     new_calib.point_us[2] = 0; new_calib.point_us[3] = 0;
     new_calib.point_us[4] = 0; new_calib.reserved[0] = 0;
 
-    Draw_Work_Title("距离校准");
-    Draw_Key_Tips("确认开始校准", "返回退出校准");
-    OS_String_Show(280, 150, 24, 1, "校准提示");
-    OS_String_Show(280, 180, 24, 1, "当前状态");
+    Draw_Work_Title("璺濈鏍″噯");
+    Draw_Key_Tips("纭寮€濮嬫牎鍑�", "杩斿洖閫€鍑烘牎鍑�");
+    OS_String_Show(280, 150, 24, 1, "鏍″噯鎻愮ず");
+    OS_String_Show(280, 180, 24, 1, "褰撳墠鐘舵€�");
     OS_String_Show(280, 210, 24, 1, "100mm(us)");
     OS_String_Show(280, 240, 24, 1, "300mm(us)");
     OS_String_Show(280, 270, 24, 1, "600mm(us)");
     OS_String_Show(280, 300, 24, 1, "900mm(us)");
     OS_String_Show(280, 330, 24, 1, "1300mm(us)");
-    OS_String_Show(280, 360, 24, 1, "当前测值(us)");
-    OS_String_Show(280, 390, 24, 1, "校准结果");
-    Show_Text_Value_Only(1, "等待校准");
+    OS_String_Show(280, 360, 24, 1, "褰撳墠娴嬪€�(us)");
+    OS_String_Show(280, 390, 24, 1, "鏍″噯缁撴灉");
+    Show_Text_Value_Only(1, "绛夊緟鏍″噯");
     Show_Text_Value_Only(2, "00000"); Show_Text_Value_Only(3, "00000");
     Show_Text_Value_Only(4, "00000"); Show_Text_Value_Only(5, "00000");
     Show_Text_Value_Only(6, "00000"); Show_Text_Value_Only(7, "00000");
-    Show_Text_Value_Only(8, "等待校准");
+    Show_Text_Value_Only(8, "绛夊緟鏍″噯");
 
     while(Ps2KeyValue != KeyValue_Back)
     {
         if(step != last_step)
         {
-            sprintf(line, "对准%04umm", k_calib_distance_mm[step]);
+            sprintf(line, "瀵瑰噯%04umm", k_calib_distance_mm[step]);
             Show_Text_Value_Only(0, line);
             last_step = step;
         }
@@ -1060,19 +1077,19 @@ static void MenuHandler_Calibrate(void)
             uint32_t echo_us = 0;
             Ps2KeyValue = KeyValue_Null;
 
-            Show_Text_Value_Only(0, "开始校准");
-            Show_Text_Value_Only(1, "正在校准");
-            Calibration_SetMeasureWindow(k_calib_distance_mm[step]); // 设置窗口
+            Show_Text_Value_Only(0, "寮€濮嬫牎鍑�");
+            Show_Text_Value_Only(1, "姝ｅ湪鏍″噯");
+            Calibration_SetMeasureWindow(k_calib_distance_mm[step]); // 璁剧疆绐楀彛
             if(Ultrasonic_MeasureFiltered(&echo_us) != 0U)
             {
                 new_calib.point_us[step] = echo_us;
                 sprintf(line, "%05lu", (unsigned long)echo_us);
                 Show_Text_Value_Only(7, line);
                 Show_Text_Value_Only((uint16_t)(2 + step), line);
-                Show_Text_Value_Only(1, "采样完成");
+                Show_Text_Value_Only(1, "閲囨牱瀹屾垚");
                 step++;
 
-                if(step >= 5U) // 5个点全部完成
+                if(step >= 5U) // 5涓偣鍏ㄩ儴瀹屾垚
                 {
                     uint8_t valid_ok = Calibration_IsValid(&new_calib);
                     uint8_t save_ok = 0U;
@@ -1086,16 +1103,16 @@ static void MenuHandler_Calibrate(void)
                     {
                         g_calib = new_calib;
                         g_calib_valid = 1;
-                        Show_Text_Value_Only(8, "校准完成  ");
+                        Show_Text_Value_Only(8, "鏍″噯瀹屾垚  ");
                     }
                     else if(valid_ok == 0U)
                     {
-                        Show_Text_Value_Only(1, "检查点位");
+                        Show_Text_Value_Only(1, "妫€鏌ョ偣浣�");
                         Show_Text_Value_Only(8, "POINT ERR ");
                     }
                     else
                     {
-                        Show_Text_Value_Only(1, "写入失败");
+                        Show_Text_Value_Only(1, "鍐欏叆澶辫触");
                         Show_Text_Value_Only(8, "FLASH ERR ");
                     }
                     delay_ms(1000);
@@ -1104,10 +1121,10 @@ static void MenuHandler_Calibrate(void)
             }
             else
             {
-                Show_Text_Value_Only(1, "校准超时");
-                Show_Text_Value_Only(8, "校准失败");
+                Show_Text_Value_Only(1, "鏍″噯瓒呮椂");
+                Show_Text_Value_Only(8, "鏍″噯澶辫触");
             }
-            Show_Text_Value_Only(8, "松开确认键");
+            Show_Text_Value_Only(8, "鏉惧紑纭閿�");
             Wait_Ps2KeyRelease(KeyValue_Enter);
         }
         delay_ms(20);
@@ -1119,28 +1136,28 @@ static void MenuHandler_Calibrate(void)
 }
 
 /**
- * @brief 系统状态查看菜单处理函数
- * @details 展示校准有效性、5个校准点原始us值、当前增益
- *          支持按下确认键进行一次实时测量并显示结果
+ * @brief 绯荤粺鐘舵€佹煡鐪嬭彍鍗曞鐞嗗嚱鏁�
+ * @details 灞曠ず鏍″噯鏈夋晥鎬с€�5涓牎鍑嗙偣鍘熷us鍊笺€佸綋鍓嶅鐩�
+ *          鏀寔鎸変笅纭閿繘琛屼竴娆″疄鏃舵祴閲忓苟鏄剧ず缁撴灉
  */
 static void MenuHandler_Status(void)
 {
     char value_text[24];
 
-    Draw_Work_Title("系统状态");
-    Draw_Key_Tips("确认查看测量", "返回退出查看");
+    Draw_Work_Title("绯荤粺鐘舵€�");
+    Draw_Key_Tips("纭鏌ョ湅娴嬮噺", "杩斿洖閫€鍑烘煡鐪�");
     Ultrasonic_SetAcceptWindow(0, ULTRASONIC_TIMEOUT_US);
-    OS_String_Show(280, 150, 24, 1, "校准状态");
+    OS_String_Show(280, 150, 24, 1, "鏍″噯鐘舵€�");
     OS_String_Show(280, 180, 24, 1, "100mm(us)");
     OS_String_Show(280, 210, 24, 1, "300mm(us)");
     OS_String_Show(280, 240, 24, 1, "600mm(us)");
     OS_String_Show(280, 270, 24, 1, "900mm(us)");
     OS_String_Show(280, 300, 24, 1, "1300mm(us)");
-    OS_String_Show(280, 330, 24, 1, "当前增益(x)");
-    OS_String_Show(280, 360, 24, 1, "实时测量时间(us)");
-    OS_String_Show(280, 390, 24, 1, "实时测量距离(mm)");
+    OS_String_Show(280, 330, 24, 1, "褰撳墠澧炵泭(x)");
+    OS_String_Show(280, 360, 24, 1, "瀹炴椂娴嬮噺鏃堕棿(us)");
+    OS_String_Show(280, 390, 24, 1, "瀹炴椂娴嬮噺璺濈(mm)");
 
-    Show_Text_Value_Only(0, (g_calib_valid != 0U) ? "校准有效" : "数据无效");
+    Show_Text_Value_Only(0, (g_calib_valid != 0U) ? "鏍″噯鏈夋晥" : "鏁版嵁鏃犳晥");
     sprintf(value_text, "%05lu", (unsigned long)g_calib.point_us[0]); Show_Text_Value_Only(1, value_text);
     sprintf(value_text, "%05lu", (unsigned long)g_calib.point_us[1]); Show_Text_Value_Only(2, value_text);
     sprintf(value_text, "%05lu", (unsigned long)g_calib.point_us[2]); Show_Text_Value_Only(3, value_text);
@@ -1165,7 +1182,7 @@ static void MenuHandler_Status(void)
             }
             else
             {
-                Show_Text_Value_Only(7, "测量失败");
+                Show_Text_Value_Only(7, "娴嬮噺澶辫触");
                 Show_Text_Value_Only(8, "0000.0");
             }
         }
@@ -1177,143 +1194,143 @@ static void MenuHandler_Status(void)
 }
 
 /**
- * @brief PGA112程控增益测试菜单
- * @details 开启超声波PWM发射 (40kHz 互补PWM)，通过加减按键切换PGA112增益档位(1~128倍)
- *          按下返回键关闭PWM并退出当前菜单，方便调试前端电路。
+ * @brief PGA112绋嬫帶澧炵泭娴嬭瘯鑿滃崟
+ * @details 寮€鍚秴澹版尝PWM鍙戝皠 (40kHz 浜掕ˉPWM)锛岄€氳繃鍔犲噺鎸夐敭鍒囨崲PGA112澧炵泭妗ｄ綅(1~128鍊�)
+ *          鎸変笅杩斿洖閿叧闂璓WM骞堕€€鍑哄綋鍓嶈彍鍗曪紝鏂逛究璋冭瘯鍓嶇鐢佃矾銆�
  */
 static void MenuHandler_PGA_Test(void)
 {
-    uint8_t gain_index = 3U;  // 默认增益索引，对应8倍增益
+    uint8_t gain_index = 3U;  // 榛樿澧炵泭绱㈠紩锛屽搴�8鍊嶅鐩�
 
-    // PGA112 8档增益配置码：1/2/4/8/16/32/64/128倍
+    // PGA112 8妗ｅ鐩婇厤缃爜锛�1/2/4/8/16/32/64/128鍊�
     const uint8_t gain_codes[8] =
     {
         PGA112_GAIN_1, PGA112_GAIN_2, PGA112_GAIN_4, PGA112_GAIN_8,
         PGA112_GAIN_16, PGA112_GAIN_32, PGA112_GAIN_64, PGA112_GAIN_128
     };
 
-    char value_text[24];  // 字符串缓存
+    char value_text[24];  // 瀛楃涓茬紦瀛�
 
-    Ultrasonic_PWM_OutputEnable();                     // 开启超声波PWM输出
-    Ultrasonic_ApplyGain(gain_codes[gain_index]);      // 加载初始增益
+    Ultrasonic_PWM_OutputEnable();                     // 寮€鍚秴澹版尝PWM杈撳嚭
+    Ultrasonic_ApplyGain(gain_codes[gain_index]);      // 鍔犺浇鍒濆澧炵泭
 
-    // 界面标题、按键提示、固定文本
-    Draw_Work_Title("程控增益调节");
-    Draw_Key_Tips("+/-调节增益", "Back退出并关闭PWM");
-    OS_String_Show(280, 150, 24, 1, "PWM输出状态");
-    OS_String_Show(280, 180, 24, 1, "输出方式");
-    OS_String_Show(280, 210, 24, 1, "输出频率(Hz)");
-    OS_String_Show(280, 240, 24, 1, "输出占空比(%)");
-    OS_String_Show(280, 270, 24, 1, "当前增益(x)");
-    OS_String_Show(280, 300, 24, 1, "增益档位");
-    OS_String_Show(280, 330, 24, 1, "波形说明");
-    OS_String_Show(280, 360, 24, 1, "当前提示");
+    // 鐣岄潰鏍囬銆佹寜閿彁绀恒€佸浐瀹氭枃鏈�
+    Draw_Work_Title("绋嬫帶澧炵泭璋冭妭");
+    Draw_Key_Tips("+/-璋冭妭澧炵泭", "Back閫€鍑哄苟鍏抽棴PWM");
+    OS_String_Show(280, 150, 24, 1, "PWM杈撳嚭鐘舵€�");
+    OS_String_Show(280, 180, 24, 1, "杈撳嚭鏂瑰紡");
+    OS_String_Show(280, 210, 24, 1, "杈撳嚭棰戠巼(Hz)");
+    OS_String_Show(280, 240, 24, 1, "杈撳嚭鍗犵┖姣�(%)");
+    OS_String_Show(280, 270, 24, 1, "褰撳墠澧炵泭(x)");
+    OS_String_Show(280, 300, 24, 1, "澧炵泭妗ｄ綅");
+    OS_String_Show(280, 330, 24, 1, "娉㈠舰璇存槑");
+    OS_String_Show(280, 360, 24, 1, "褰撳墠鎻愮ず");
 
-    // 初始化界面固定内容
-    Show_Text_Value_Only(0, "开启");
-    Show_Text_Value_Only(1, "互补PWM");
+    // 鍒濆鍖栫晫闈㈠浐瀹氬唴瀹�
+    Show_Text_Value_Only(0, "寮€鍚�");
+    Show_Text_Value_Only(1, "浜掕ˉPWM");
     Show_Text_Value_Only(2, "040000");
     Show_Text_Value_Only(3, "050");
     sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
     Show_Text_Value_Only(4, value_text);
     Show_Text_Value_Only(5, "1/2/4/8/16/32/64/128");
-    Show_Text_Value_Only(6, "PD12/PD13输出");
-    Show_Text_Value_Only(7, "等待调节");
+    Show_Text_Value_Only(6, "PD12/PD13杈撳嚭");
+    Show_Text_Value_Only(7, "绛夊緟璋冭妭");
 
-    // 主循环：按键调节增益，返回键退出
+    // 涓诲惊鐜細鎸夐敭璋冭妭澧炵泭锛岃繑鍥為敭閫€鍑�
     while(Ps2KeyValue != KeyValue_Back)
     {
-        // 增加增益
+        // 澧炲姞澧炵泭
         if(Ps2KeyValue == KeyValue_Add)
         {
             Ps2KeyValue = KeyValue_Null;
-            if(gain_index < 7U) // 未到最大档位
+            if(gain_index < 7U) // 鏈埌鏈€澶ф。浣�
             {
                 gain_index++;
-                Ultrasonic_ApplyGain(gain_codes[gain_index]); // 设置新增益
+                Ultrasonic_ApplyGain(gain_codes[gain_index]); // 璁剧疆鏂板鐩�
                 sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
                 Show_Text_Value_Only(4, value_text);
-                Show_Text_Value_Only(7, "增益已调大");
+                Show_Text_Value_Only(7, "澧炵泭宸茶皟澶�");
             }
             else
             {
-                Show_Text_Value_Only(7, "已到最大增益");
+                Show_Text_Value_Only(7, "宸插埌鏈€澶у鐩�");
             }
         }
-        // 减小增益
+        // 鍑忓皬澧炵泭
         else if(Ps2KeyValue == KeyValue_Minus)
         {
             Ps2KeyValue = KeyValue_Null;
-            if(gain_index > 0U) // 未到最小档位
+            if(gain_index > 0U) // 鏈埌鏈€灏忔。浣�
             {
                 gain_index--;
-                Ultrasonic_ApplyGain(gain_codes[gain_index]); // 设置新增益
+                Ultrasonic_ApplyGain(gain_codes[gain_index]); // 璁剧疆鏂板鐩�
                 sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
                 Show_Text_Value_Only(4, value_text);
-                Show_Text_Value_Only(7, "增益已调小");
+                Show_Text_Value_Only(7, "澧炵泭宸茶皟灏�");
             }
             else
             {
-                Show_Text_Value_Only(7, "已到最小增益");
+                Show_Text_Value_Only(7, "宸插埌鏈€灏忓鐩�");
             }
         }
         delay_ms(20);
     }
 
-    Ultrasonic_PWM_OutputDisable();  // 关闭PWM输出
-    Ps2KeyValue = KeyValue_Null;     // 清空按键状态
-    Change_Menu(0);                  // 返回主菜单
+    Ultrasonic_PWM_OutputDisable();  // 鍏抽棴PWM杈撳嚭
+    Ps2KeyValue = KeyValue_Null;     // 娓呯┖鎸夐敭鐘舵€�
+    Change_Menu(0);                  // 杩斿洖涓昏彍鍗�
 }
 
-/************************* 中断服务函数 *************************/
+/************************* 涓柇鏈嶅姟鍑芥暟 *************************/
 
 /**
- * @brief EXTI0 外部中断服务函数
- * @note 回波信号(PC0)边沿触发中断，采用**状态机**捕获超声波回波时序
- * @流程 盲区过滤 → 捕获上升沿 → 捕获下降沿 → 校验脉冲有效性 → 标记采样完成
- * @attention 该中断优先级较高，应尽快处理，避免阻塞其他中断
+ * @brief EXTI0 澶栭儴涓柇鏈嶅姟鍑芥暟
+ * @note 鍥炴尝淇″彿(PC0)杈规部瑙﹀彂涓柇锛岄噰鐢�**鐘舵€佹満**鎹曡幏瓒呭０娉㈠洖娉㈡椂搴�
+ * @娴佺▼ 鐩插尯杩囨护 鈫� 鎹曡幏涓婂崌娌� 鈫� 鎹曡幏涓嬮檷娌� 鈫� 鏍￠獙鑴夊啿鏈夋晥鎬� 鈫� 鏍囪閲囨牱瀹屾垚
+ * @attention 璇ヤ腑鏂紭鍏堢骇杈冮珮锛屽簲灏藉揩澶勭悊锛岄伩鍏嶉樆濉炲叾浠栦腑鏂�
  */
 void EXTI0_IRQHandler(void)
 {
-    // 判断是否为 EXTI_Line0 中断触发
+    // 鍒ゆ柇鏄惁涓� EXTI_Line0 涓柇瑙﹀彂
     if(EXTI_GetITStatus(EXTI_Line0) != RESET)
     {
-        // 仅在测量窗口开启时，才响应回波信号，屏蔽杂波干扰
+        // 浠呭湪娴嬮噺绐楀彛寮€鍚椂锛屾墠鍝嶅簲鍥炴尝淇″彿锛屽睆钄芥潅娉㈠共鎵�
         if(g_measure_active != 0U)
         {
-            // 读取TIM5计数器值(微秒计时)
+            // 璇诲彇TIM5璁℃暟鍣ㄥ€�(寰璁℃椂)
             uint32_t now = TIM_GetCounter(TIM5);
 
-            // 阶段1：过滤发射近端盲区，滤除发射耦合干扰 (探头发射后的余震期)
+            // 闃舵1锛氳繃婊ゅ彂灏勮繎绔洸鍖猴紝婊ら櫎鍙戝皠鑰﹀悎骞叉壈 (鎺㈠ご鍙戝皠鍚庣殑浣欓渿鏈�)
             if(now >= ULTRASONIC_BLANKING_US)
             {
-                // 引脚为高电平：判定为【上升沿】
+                // 寮曡剼涓洪珮鐢靛钩锛氬垽瀹氫负銆愪笂鍗囨部銆�
                 if(GPIO_ReadInputDataBit(GPIOC, GPIO_Pin_0) != Bit_RESET)
                 {
-                    // 未记录过上升沿 + 在有效时间窗口内，记录上升沿时刻
+                    // 鏈褰曡繃涓婂崌娌� + 鍦ㄦ湁鏁堟椂闂寸獥鍙ｅ唴锛岃褰曚笂鍗囨部鏃跺埢
                     if((g_echo_rise_seen == 0U) && (now >= g_echo_accept_min_us))
                     {
-                        g_echo_rise_us = now;     // 保存上升沿时间戳
-                        g_echo_rise_seen = 1U;    // 标记已捕获上升沿
+                        g_echo_rise_us = now;     // 淇濆瓨涓婂崌娌挎椂闂存埑
+                        g_echo_rise_seen = 1U;    // 鏍囪宸叉崟鑾蜂笂鍗囨部
                     }
                 }
-                // 引脚为低电平 + 已捕获上升沿 + 时间合法：判定为【下降沿】
+                // 寮曡剼涓轰綆鐢靛钩 + 宸叉崟鑾蜂笂鍗囨部 + 鏃堕棿鍚堟硶锛氬垽瀹氫负銆愪笅闄嶆部銆�
                 else if(g_echo_rise_seen != 0U && now > g_echo_rise_us)
                 {
-                    g_echo_fall_us = now;  // 保存下降沿时间戳
-                    // 计算回波峰值等效时间(中心时刻算法)
+                    g_echo_fall_us = now;  // 淇濆瓨涓嬮檷娌挎椂闂存埑
+                    // 璁＄畻鍥炴尝宄板€肩瓑鏁堟椂闂�(涓績鏃跺埢绠楁硶)
                     g_echo_time_us = Ultrasonic_EstimatePeakTime(g_echo_rise_us, g_echo_fall_us);
 
-                    // 多重有效性校验：时间范围、脉冲宽度、窗口范围，滤除毛刺/干扰
+                    // 澶氶噸鏈夋晥鎬ф牎楠岋細鏃堕棿鑼冨洿銆佽剦鍐插搴︺€佺獥鍙ｈ寖鍥达紝婊ら櫎姣涘埡/骞叉壈
                     if((g_echo_time_us >= ULTRASONIC_MIN_VALID_US) &&
                        ((g_echo_fall_us - g_echo_rise_us) >= ULTRASONIC_MIN_PULSE_WIDTH_US) &&
                        (g_echo_time_us >= g_echo_accept_min_us) &&
                        (g_echo_time_us <= g_echo_accept_max_us))
                     {
-                        g_echo_captured = 1U;    // 标记采样完成，主循环可取数
-                        g_measure_active = 0U;   // 关闭本次测量窗口，停止接收中断
+                        g_echo_captured = 1U;    // 鏍囪閲囨牱瀹屾垚锛屼富寰幆鍙彇鏁�
+                        g_measure_active = 0U;   // 鍏抽棴鏈娴嬮噺绐楀彛锛屽仠姝㈡帴鏀朵腑鏂�
                     }
-                    // 校验失败：清空状态，等待下一次回波
+                    // 鏍￠獙澶辫触锛氭竻绌虹姸鎬侊紝绛夊緟涓嬩竴娆″洖娉�
                     else
                     {
                         g_echo_rise_seen = 0U;
@@ -1324,7 +1341,7 @@ void EXTI0_IRQHandler(void)
             }
         }
 
-        // 必须清除中断挂起标志，否则会重复进中断
+        // 蹇呴』娓呴櫎涓柇鎸傝捣鏍囧織锛屽惁鍒欎細閲嶅杩涗腑鏂�
         EXTI_ClearITPendingBit(EXTI_Line0);
     }
 }
