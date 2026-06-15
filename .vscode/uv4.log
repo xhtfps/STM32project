@@ -6,13 +6,13 @@ JLink info:
 DLL: V9.50 , compiled Jun 10 2026 12:18:43
 Firmware: J-Link V9 compiled May  7 2021 16:26:12
 Hardware: V9.40
-S/N : 69403710 
+S/N : 59400093 
 Feature(s) : RDI, GDB, FlashDL, FlashBP, JFlash 
 
 * JLink Info: InitTarget() start
 * JLink Info: SWD selected. Executing JTAG -> SWD switching sequence.
 * JLink Info: DAP initialized successfully.
-* JLink Info: InitTarget() end - Took 13.2ms
+* JLink Info: InitTarget() end - Took 14.7ms
 * JLink Info: Found SW-DP with ID 0x2BA01477
 * JLink Info: DPIDR: 0x2BA01477
 * JLink Info: CoreSight SoC-400 or earlier
@@ -41,12 +41,12 @@ ROMTableAddr = 0xE00FF000
 Target info:
 ------------
 Device: STM32F407ZG
-VTarget = 3.291V
-State of Pins: TCK: 0, TDI: 0, TDO: 1, TMS: 1, TRES: 1, TRST: 1
+VTarget = 3.287V
+State of Pins: TCK: 0, TDI: 1, TDO: 1, TMS: 1, TRES: 1, TRST: 1
 Hardware-Breakpoints: 6
 Software-Breakpoints: 8192
 Watchpoints:          4
-JTAG speed: 6000 kHz
+JTAG speed: 12000 kHz
 
 * JLink Info: Memory map 'after startup completion point' is active
 Erase Done.Programming Done.Verify OK.* JLink Info: Memory map 'before startup completion point' is active
@@ -56,5 +56,5 @@ Erase Done.Programming Done.Verify OK.* JLink Info: Memory map 'before startup c
 * JLink Info: Memory map 'after startup completion point' is active
 Application running ...
 * JLink Info: OnDisconnectTarget() start
-* JLink Info: OnDisconnectTarget() end - Took 1.23ms
-Flash Load finished at 21:03:00
+* JLink Info: OnDisconnectTarget() end - Took 1.05ms
+Flash Load finished at 20:45:15

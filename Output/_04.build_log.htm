@@ -34,16 +34,18 @@ compiling User.c...
   void User_DAC_Configure();
 _01_App\User.h(8): warning:  #1-D: last line of file ends without a newline
   #endif
-_01_App\User.c(318): warning:  #177-D: function "Show_Text_Line"  was declared but never referenced
+_01_App\User.c(717): warning:  #177-D: variable "best_mid"  was declared but never referenced
+          uint8_t best_mid;
+_01_App\User.c(323): warning:  #177-D: function "Show_Text_Line"  was declared but never referenced
   static void Show_Text_Line(uint16_t line, char *text) 
-_01_App\User.c(331): warning:  #177-D: function "Show_Value_Line"  was declared but never referenced
+_01_App\User.c(336): warning:  #177-D: function "Show_Value_Line"  was declared but never referenced
   static void Show_Value_Line(uint16_t line, char *label, double value, char *format) 
-_01_App\User.c(346): warning:  #177-D: function "Show_Value_Only"  was declared but never referenced
+_01_App\User.c(351): warning:  #177-D: function "Show_Value_Only"  was declared but never referenced
   static void Show_Value_Only(uint16_t line, double value, char *format) 
-_01_App\User.c: 6 warnings, 0 errors
+_01_App\User.c: 7 warnings, 0 errors
 linking...
-Program Size: Code=21096 RO-data=42436 RW-data=160 ZI-data=1166840  
-".\Output\_04.axf" - 0 Error(s), 6 Warning(s).
+Program Size: Code=21228 RO-data=42436 RW-data=160 ZI-data=1166840  
+".\Output\_04.axf" - 0 Error(s), 7 Warning(s).
 
 <h2>Software Packages used:</h2>
 

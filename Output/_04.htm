@@ -3,11 +3,11 @@
 <title>Static Call Graph - [.\Output\_04.axf]</title></head>
 <body><HR>
 <H1>Static Call Graph for image .\Output\_04.axf</H1><HR>
-<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 5060528: Last Updated: Sun Jun 14 21:02:52 2026
+<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 5060528: Last Updated: Mon Jun 15 20:45:07 2026
 <BR><P>
-<H3>Maximum Stack Usage =        472 bytes + Unknown(Functions without stacksize, Cycles, Untraceable Function Pointers)</H3><H3>
+<H3>Maximum Stack Usage =        432 bytes + Unknown(Functions without stacksize, Cycles, Untraceable Function Pointers)</H3><H3>
 Call chain for Maximum Stack Depth:</H3>
-User_main &rArr; MenuHandler_Calibrate &rArr; Ultrasonic_MeasureFiltered &rArr; Ultrasonic_PrepareGain &rArr; Ultrasonic_ApplyGain &rArr; PGA112_SetGainCode &rArr; PGA112_WriteConfig &rArr; User_SPI_Write16 &rArr; User_SPI_Transfer16 &rArr; delay_us &rArr; OS_SchedUnlock
+User_main &rArr; MenuHandler_Calibrate &rArr; Change_Menu &rArr; Clear_Work_Area &rArr; Clear_Work_Text &rArr; OS_String_Show &rArr; OS_Font_Show &rArr; OS_HzMat_Get &rArr; W25Q64_Read &rArr; SPI1_ReadWriteByte
 <P>
 <H3>
 Functions with no stack information
@@ -1707,8 +1707,8 @@ Global Symbols
 </UL>
 
 <P><STRONG><a name="[66]"></a>User_main</STRONG> (Thumb, 98 bytes, Stack size 0 bytes, user.o(i.User_main))
-<BR><BR>[Stack]<UL><LI>Max Depth = 472 + Unknown Stack Size
-<LI>Call Chain = User_main &rArr; MenuHandler_Calibrate &rArr; Ultrasonic_MeasureFiltered &rArr; Ultrasonic_PrepareGain &rArr; Ultrasonic_ApplyGain &rArr; PGA112_SetGainCode &rArr; PGA112_WriteConfig &rArr; User_SPI_Write16 &rArr; User_SPI_Transfer16 &rArr; delay_us &rArr; OS_SchedUnlock
+<BR><BR>[Stack]<UL><LI>Max Depth = 432 + Unknown Stack Size
+<LI>Call Chain = User_main &rArr; MenuHandler_Calibrate &rArr; Change_Menu &rArr; Clear_Work_Area &rArr; Clear_Work_Text &rArr; OS_String_Show &rArr; OS_Font_Show &rArr; OS_HzMat_Get &rArr; W25Q64_Read &rArr; SPI1_ReadWriteByte
 </UL>
 <BR>[Calls]<UL><LI><a href="#[d5]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;delay_ms
 <LI><a href="#[de]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;MenuHandler_Status
@@ -1954,7 +1954,8 @@ Local Symbols
 </UL>
 
 <P><STRONG><a name="[ac]"></a>Convert_Time_To_Distance_Default</STRONG> (Thumb, 66 bytes, Stack size 0 bytes, user.o(i.Convert_Time_To_Distance_Default))
-<BR><BR>[Called By]<UL><LI><a href="#[d7]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;MenuHandler_Measure
+<BR><BR>[Called By]<UL><LI><a href="#[de]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;MenuHandler_Status
+<LI><a href="#[d7]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;MenuHandler_Measure
 <LI><a href="#[ab]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Convert_Time_To_Distance
 </UL>
 
@@ -2004,8 +2005,8 @@ Local Symbols
 </UL>
 
 <P><STRONG><a name="[d2]"></a>MenuHandler_Calibrate</STRONG> (Thumb, 590 bytes, Stack size 80 bytes, user.o(i.MenuHandler_Calibrate))
-<BR><BR>[Stack]<UL><LI>Max Depth = 472 + Unknown Stack Size
-<LI>Call Chain = MenuHandler_Calibrate &rArr; Ultrasonic_MeasureFiltered &rArr; Ultrasonic_PrepareGain &rArr; Ultrasonic_ApplyGain &rArr; PGA112_SetGainCode &rArr; PGA112_WriteConfig &rArr; User_SPI_Write16 &rArr; User_SPI_Transfer16 &rArr; delay_us &rArr; OS_SchedUnlock
+<BR><BR>[Stack]<UL><LI>Max Depth = 432 + Unknown Stack Size
+<LI>Call Chain = MenuHandler_Calibrate &rArr; Change_Menu &rArr; Clear_Work_Area &rArr; Clear_Work_Text &rArr; OS_String_Show &rArr; OS_Font_Show &rArr; OS_HzMat_Get &rArr; W25Q64_Read &rArr; SPI1_ReadWriteByte
 </UL>
 <BR>[Calls]<UL><LI><a href="#[d5]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;delay_ms
 <LI><a href="#[a8]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;OS_String_Show
@@ -2025,13 +2026,14 @@ Local Symbols
 <BR>[Called By]<UL><LI><a href="#[66]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;User_main
 </UL>
 
-<P><STRONG><a name="[d7]"></a>MenuHandler_Measure</STRONG> (Thumb, 442 bytes, Stack size 48 bytes, user.o(i.MenuHandler_Measure))
-<BR><BR>[Stack]<UL><LI>Max Depth = 440 + Unknown Stack Size
-<LI>Call Chain = MenuHandler_Measure &rArr; Ultrasonic_MeasureFiltered &rArr; Ultrasonic_PrepareGain &rArr; Ultrasonic_ApplyGain &rArr; PGA112_SetGainCode &rArr; PGA112_WriteConfig &rArr; User_SPI_Write16 &rArr; User_SPI_Transfer16 &rArr; delay_us &rArr; OS_SchedUnlock
+<P><STRONG><a name="[d7]"></a>MenuHandler_Measure</STRONG> (Thumb, 516 bytes, Stack size 48 bytes, user.o(i.MenuHandler_Measure))
+<BR><BR>[Stack]<UL><LI>Max Depth = 400 + Unknown Stack Size
+<LI>Call Chain = MenuHandler_Measure &rArr; Change_Menu &rArr; Clear_Work_Area &rArr; Clear_Work_Text &rArr; OS_String_Show &rArr; OS_Font_Show &rArr; OS_HzMat_Get &rArr; W25Q64_Read &rArr; SPI1_ReadWriteByte
 </UL>
 <BR>[Calls]<UL><LI><a href="#[d5]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;delay_ms
 <LI><a href="#[da]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;PGA112_GetGainValue
 <LI><a href="#[a8]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;OS_String_Show
+<LI><a href="#[d6]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Wait_Ps2KeyRelease
 <LI><a href="#[d8]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_SetTrackingWindow
 <LI><a href="#[d4]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_MeasureFiltered
 <LI><a href="#[d3]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Show_Text_Value_Only
@@ -2065,18 +2067,20 @@ Local Symbols
 <BR>[Called By]<UL><LI><a href="#[66]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;User_main
 </UL>
 
-<P><STRONG><a name="[de]"></a>MenuHandler_Status</STRONG> (Thumb, 508 bytes, Stack size 48 bytes, user.o(i.MenuHandler_Status))
-<BR><BR>[Stack]<UL><LI>Max Depth = 440 + Unknown Stack Size
-<LI>Call Chain = MenuHandler_Status &rArr; Ultrasonic_MeasureFiltered &rArr; Ultrasonic_PrepareGain &rArr; Ultrasonic_ApplyGain &rArr; PGA112_SetGainCode &rArr; PGA112_WriteConfig &rArr; User_SPI_Write16 &rArr; User_SPI_Transfer16 &rArr; delay_us &rArr; OS_SchedUnlock
+<P><STRONG><a name="[de]"></a>MenuHandler_Status</STRONG> (Thumb, 478 bytes, Stack size 48 bytes, user.o(i.MenuHandler_Status))
+<BR><BR>[Stack]<UL><LI>Max Depth = 400 + Unknown Stack Size
+<LI>Call Chain = MenuHandler_Status &rArr; Change_Menu &rArr; Clear_Work_Area &rArr; Clear_Work_Text &rArr; OS_String_Show &rArr; OS_Font_Show &rArr; OS_HzMat_Get &rArr; W25Q64_Read &rArr; SPI1_ReadWriteByte
 </UL>
 <BR>[Calls]<UL><LI><a href="#[d5]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;delay_ms
 <LI><a href="#[da]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;PGA112_GetGainValue
 <LI><a href="#[a8]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;OS_String_Show
+<LI><a href="#[d8]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_SetTrackingWindow
 <LI><a href="#[a6]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_SetAcceptWindow
 <LI><a href="#[d4]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_MeasureFiltered
 <LI><a href="#[d3]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Show_Text_Value_Only
 <LI><a href="#[b2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Draw_Work_Title
 <LI><a href="#[b1]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Draw_Key_Tips
+<LI><a href="#[ac]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Convert_Time_To_Distance_Default
 <LI><a href="#[ab]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Convert_Time_To_Distance
 <LI><a href="#[a7]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Change_Menu
 <LI><a href="#[d9]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;__aeabi_f2d
@@ -2133,8 +2137,8 @@ Local Symbols
 <BR><BR>[Called By]<UL><LI><a href="#[14]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;EXTI0_IRQHandler
 </UL>
 
-<P><STRONG><a name="[d4]"></a>Ultrasonic_MeasureFiltered</STRONG> (Thumb, 376 bytes, Stack size 280 bytes, user.o(i.Ultrasonic_MeasureFiltered))
-<BR><BR>[Stack]<UL><LI>Max Depth = 392 + Unknown Stack Size
+<P><STRONG><a name="[d4]"></a>Ultrasonic_MeasureFiltered</STRONG> (Thumb, 404 bytes, Stack size 200 bytes, user.o(i.Ultrasonic_MeasureFiltered))
+<BR><BR>[Stack]<UL><LI>Max Depth = 312 + Unknown Stack Size
 <LI>Call Chain = Ultrasonic_MeasureFiltered &rArr; Ultrasonic_PrepareGain &rArr; Ultrasonic_ApplyGain &rArr; PGA112_SetGainCode &rArr; PGA112_WriteConfig &rArr; User_SPI_Write16 &rArr; User_SPI_Transfer16 &rArr; delay_us &rArr; OS_SchedUnlock
 </UL>
 <BR>[Calls]<UL><LI><a href="#[d5]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;delay_ms
@@ -2188,7 +2192,8 @@ Local Symbols
 </UL>
 <BR>[Calls]<UL><LI><a href="#[a6]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_SetAcceptWindow
 </UL>
-<BR>[Called By]<UL><LI><a href="#[d7]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;MenuHandler_Measure
+<BR>[Called By]<UL><LI><a href="#[de]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;MenuHandler_Status
+<LI><a href="#[d7]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;MenuHandler_Measure
 </UL>
 
 <P><STRONG><a name="[bd]"></a>Ultrasonic_Timer_Init</STRONG> (Thumb, 56 bytes, Stack size 16 bytes, user.o(i.Ultrasonic_Timer_Init))
@@ -2208,7 +2213,8 @@ Local Symbols
 </UL>
 <BR>[Calls]<UL><LI><a href="#[d5]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;delay_ms
 </UL>
-<BR>[Called By]<UL><LI><a href="#[d2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;MenuHandler_Calibrate
+<BR>[Called By]<UL><LI><a href="#[d7]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;MenuHandler_Measure
+<LI><a href="#[d2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;MenuHandler_Calibrate
 </UL>
 
 <P><STRONG><a name="[118]"></a>Ultrasonic_PWM_PinsToAf</STRONG> (Thumb, 100 bytes, Stack size 16 bytes, drive_pwm.o(i.Ultrasonic_PWM_PinsToAf))
