@@ -7,7 +7,7 @@
 
 /************************* 超声波模块参数配置 *************************/
 /*
- * 物理原理：常温空气中声速 ≈ 343 m/s
+ * 物理原理：常温空气中声速 343 m/s
  * 1us 声波单程距离：343 * 100 / 1000000 = 0.0343 cm = 0.343 mm
  * 超声波往返测距，因此 1us 对应实际距离：0.343 / 2 = 0.1715 mm
  */
@@ -21,25 +21,28 @@
 // 450us 盲区对应近距离约 7.7cm，避免近距离自激误触发
 #define ULTRASONIC_BLANKING_US       450U   
 // 采样滤波点数：单次有效测距采集多组样本，配合极值、聚类算法降噪
-#define ULTRASONIC_FILTER_SAMPLES    40U
+#define ULTRASONIC_FILTER_SAMPLES    8U
 // 样本聚类区间(us)：判断两组采样值是否属于同一个有效回波簇
 #define ULTRASONIC_CLUSTER_SPAN_US   80U
-#define ULTRASONIC_CLUSTER_MIN_COUNT 6U
+#define ULTRASONIC_CLUSTER_MIN_COUNT 3U
 // 增益最大重试次数：回波微弱未检测到时，逐级提升PGA增益的最大尝试次数
 #define ULTRASONIC_GAIN_RETRY_MAX    3U
+#define ULTRASONIC_BURST_INTERVAL_MS 30U
+#define ULTRASONIC_SEARCH_BASE_GAIN  PGA112_GAIN_16
+#define ULTRASONIC_SEARCH_MAX_GAIN   PGA112_GAIN_64
 // 跟踪窗口余量(us)：锁定有效回波后，在历史值基础上扩大窗口范围，动态跟踪目标
 #define ULTRASONIC_TRACK_MARGIN_US   4000U
 // 连续丢失回波次数阈值：超过该值判定目标丢失，重新全域搜索
 #define ULTRASONIC_REACQUIRE_MISSES  2U
 // 重搜索模式下最小接收时间(us)：屏蔽近距离自激干扰，专用于远距离搜索
 #define ULTRASONIC_REACQUIRE_MIN_US  650U
-// 校准数据Flash存储地址：STM32F407 Sector11起始地址(Flash最后128KB扇区)
-// 选用末尾扇区，避免与程序代码区(0x08000000开始)冲突
+// 校准数据Flash存储地址：STM32F407 Sector11起始地址(Flash最后28KB扇区)
+// 选用末尾扇区，避免与程序代码0x08000000开头冲突
 #define ULTRASONIC_FLASH_ADDR        0x080E0000U
 // Flash数据魔术字：ASCII "USON" (0x55 0x53 0x4F 0x4E)
-// 上电校验魔术字，判断Flash区域是否为合法校准数据，区分空/乱码
+// 上电校验魔术字，判断Flash区域是否为合法校准数据，区分乱码
 #define ULTRASONIC_FLASH_MAGIC       0x55534F4EU  
-// 数据版本号：结构体/字段修改时升级版本，让旧版校准数据自动失效，防止解析错误
+// 数据版本号：结构体字段修改时升级版本，让旧版校准数据自动失效，防止解析错误
 #define ULTRASONIC_FLASH_VERSION     0x00010004U  
 
 /************************* 界面显示字符串定义 *************************/
@@ -48,14 +51,14 @@
 #define USER_VER_STR     "版本：V1.0"               //软件版本号
 #define MENU1_CHOICE1    "1. 手动测量"              //菜单选项1
 #define MENU1_CHOICE2    "2. 距离校准"              //菜单选项2
-#define MENU1_CHOICE3    "3. 实时测量"              //菜单选项3                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
+#define MENU1_CHOICE3    "3. 实时测量"              //菜单选项3
 #define MENU1_CHOICE4    "4. 程控调节"              //菜单选项4
-#define MENU_CHOICE_NUM  4                         //菜单总数量
+#define MENU_CHOICE_NUM  4                         //菜单总数
 
-// 局部清屏空白串：用空格覆盖原有字符，比全局清屏LCD_Clear效率更高，减少闪屏
-#define UI_BLANK_TEXT_16 "                                                                "  // 16号字体 64字符空格
-#define UI_BLANK_TEXT_24 "                                                "                // 24号字体 48字符空格
-#define UI_BLANK_TEXT_32 "                                "                                // 32号字体 32字符空格
+// 局部清屏空白串：用空格覆盖原有字符，比全局清屏LCD_Clear效率更高，减少闪烁
+#define UI_BLANK_TEXT_16 "                                                                "  // 16号字体64字符空格
+#define UI_BLANK_TEXT_24 "                                                "                // 24号字体48字符空格
+#define UI_BLANK_TEXT_32 "                                "                                // 32号字体32字符空格
 #define UI_VALUE_BLANK_24 "                        "                                       // 数值区域专用空白串
 
 /************************* 数据结构定义 *************************/
@@ -63,14 +66,14 @@
 /**
  * @brief 超声波分段线性校准数据结构体
  * @note 用于修正硬件延迟、声速偏差、电路非线性误差，采用多点分段插值校准
- * @attention 结构体自然4字节对齐，适配Flash 32bit写入规则
+ * @attention 结构体自主字节对齐，适配Flash 32bit写入规则
  */
 typedef struct
 {
     uint32_t magic;               // 数据合法性魔术标记
     uint32_t version;             // 结构体版本号
     uint32_t point_us[5];         // 存储5个标准距离下实际测得的回波时间(us)
-    uint32_t reserved[1];         // 预留空间，保证结构体总大小32字节
+    uint32_t reserved[1];         // 预留空间，保证结构体总大小128字节
 } UltrasonicCalibData;
 
 // 5组基准校准距离(单位：mm)，覆盖近、中、远全量程区间
@@ -79,14 +82,14 @@ static const uint16_t k_calib_distance_mm[5] = {100, 300, 600, 900, 1300};
 /************************* 全局变量定义 *************************/
 /*
  * volatile 关键字说明：
- * 以下变量均在【外部中断】中修改，volatile强制编译器每次从内存读取，
- * 禁止编译器优化，防止中断与主循环变量不同步、程序卡死。
+ * 以下变量均在【外部中断】中修改，volatile强制编译器每次从内存读取
+ * 禁止编译器优化，防止中断与主循环变量不同步、程序卡死
  */
 static volatile uint8_t g_echo_captured = 0;    // 回波采集完成标记 1=成功 0=未完成
 static volatile uint8_t g_measure_active = 0;   // 测量窗口使能标记 1=允许中断接收回波 0=屏蔽
 static volatile uint32_t g_echo_time_us = 0;    // 最终计算得到的回波峰值时间(us)
-static volatile uint32_t g_echo_rise_us = 0;    // 回波脉冲上升沿时刻(us)
-static volatile uint32_t g_echo_fall_us = 0;    // 回波脉冲下降沿时刻(us)
+static volatile uint32_t g_echo_rise_us = 0;    // 回波脉冲上升沿时间(us)
+static volatile uint32_t g_echo_fall_us = 0;    // 回波脉冲下降沿时间(us)
 static volatile uint8_t g_echo_rise_seen = 0;   // 状态机标记：是否已检测到上升沿
 static volatile uint32_t g_echo_accept_min_us = 0;  // 回波接收窗口下限(us)
 static volatile uint32_t g_echo_accept_max_us = ULTRASONIC_TIMEOUT_US; // 回波接收窗口上限(us)
@@ -110,7 +113,7 @@ static void Init_All(void);
 static void Disp_Main(void);
 static void Change_Menu(uint8_t menu_sign);
 
-// UI工具函数：局部清屏、文字绘制、按键等待
+// UI工具函数：局部清屏、文字绘制、按键等
 static void Clear_Work_Area(void);
 static void Clear_Work_Text(void);
 static void Draw_Work_Title(char *title);
@@ -134,7 +137,7 @@ static uint8_t Ultrasonic_MeasureOnce(uint32_t *echo_us);
 static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us);
 static void Sort_Samples(uint32_t *data, uint8_t length);
 
-// 校准、Flash读写、时间-距离转换算法
+// 校准、Flash读写、时间距离转换算法
 static void Calibration_Load(void);
 static uint8_t Calibration_IsValid(const UltrasonicCalibData *calib);
 static uint8_t Calibration_Save(const UltrasonicCalibData *calib);
@@ -204,7 +207,7 @@ static void Init_All(void)
     LCD_Clear(Black);                  // 全屏清屏为黑色背景
     Ultrasonic_PWM_Init();             // 初始化40kHz发射PWM波形驱动(互补PWM，驱动超声波探头)
     Ultrasonic_Timer_Init();           // 初始化TIM5微秒级高精度定时器
-    Ultrasonic_Echo_Init();            // 初始化回波接收外部中断 (PC0双边沿触发)
+    Ultrasonic_Echo_Init();            // 初始化回波接收外部中断(PC0双边沿触发)
     Calibration_Load();                // 从Flash读取历史校准数据到RAM
 
     Ultrasonic_ApplyGain(PGA112_DEFAULT_GAIN_CODE); // 设置PGA默认增益档位
@@ -280,20 +283,20 @@ static void Change_Menu(uint8_t menu_sign)
 static void Clear_Work_Area(void) { Clear_Work_Text(); }
 
 /**
- * @brief 用空白字符局部清屏，效率高于全局LCD_Clear，避免闪屏
- * @note 根据界面布局，分别清空标题区、9行信息区、底部两行提示区
+ * @brief 用空白字符局部清屏，效率高于全局LCD_Clear，避免闪烁
+ * @note 根据界面布局，分别清空标题区域、多行信息区、底部两行提示区
  */
 static void Clear_Work_Text(void)
 {
     uint8_t line;
-    // 标题区清屏 (32号字体，单行)
+    // 标题区清空(32号字体，单行)
     OS_String_Show(280, 88, 32, 1, UI_BLANK_TEXT_32);
-    // 中间多行文本区清屏 (24号字体，共9行)
+    // 中间多行文本区清空(24号字体，9行)
     for(line = 0; line < 9U; line++) 
     { 
         OS_String_Show(280, (uint16_t)(150 + line * 30), 24, 1, UI_BLANK_TEXT_24); 
     }
-    // 底部提示行清屏 (16号字体，两行)
+    // 底部提示行清空(16号字体，两行)
     OS_String_Show(280, 400, 16, 1, UI_BLANK_TEXT_16);
     OS_String_Show(280, 420, 16, 1, UI_BLANK_TEXT_16);
 }
@@ -316,7 +319,7 @@ static void Draw_Key_Tips(char *tip1, char *tip2)
 }
 
 /**
- * @brief 按行绘制纯文本 (标签区)
+ * @brief 按行绘制纯文字(标签行)
  * @param line 行号 (从0开始)
  * @param text 显示文本
  */
@@ -343,7 +346,7 @@ static void Show_Value_Line(uint16_t line, char *label, double value, char *form
 }
 
 /**
- * @brief 仅绘制右侧数值区域 (不带标签)
+ * @brief 仅绘制右侧数值区域(不带标签)
  * @param line 行号
  * @param value 数值
  * @param format 格式化串
@@ -368,8 +371,8 @@ static void Show_Text_Value_Only(uint16_t line, char *text)
 }
 
 /**
- * @brief 等待按键释放，简单按键防抖+防连按
- * @param key_value 需要等待释放的按键值 (例如KeyValue_Enter)
+ * @brief 等待按键释放，简单按键防抖防连按
+ * @param key_value 需要等待释放的按键值(例如KeyValue_Enter)
  */
 static void Wait_Ps2KeyRelease(uint8_t key_value)
 {
@@ -384,7 +387,7 @@ static void Wait_Ps2KeyRelease(uint8_t key_value)
 /**
  * @brief TIM5定时器初始化：微秒级高精度计时
  * @note 选用TIM5原因：STM32F4 32位通用定时器，计数范围0~4294967295，远距离测距不会溢出
- *       APB1时钟 = 84MHz，预分频84-1，定时器计数频率 = 1MHz → 1个计数值 = 1us
+ *       APB1时钟 = 84MHz，预分频84-1，定时器计数频率 = 1MHz → 1个计数= 1us
  */
 static void Ultrasonic_Timer_Init(void)
 {
@@ -392,7 +395,7 @@ static void Ultrasonic_Timer_Init(void)
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM5, ENABLE);  // 使能TIM5时钟
     TIM_TimeBaseStructInit(&tim_base);
 
-    tim_base.TIM_Prescaler = 84 - 1;                      // 预分频 84分频 → 1MHz
+    tim_base.TIM_Prescaler = 84 - 1;                      // 预分频84分频 → 1MHz
     tim_base.TIM_CounterMode = TIM_CounterMode_Up;       // 向上计数
     tim_base.TIM_Period = 0xFFFFFFFFU;                   // 最大自动重载值，超长计时不溢出
     tim_base.TIM_ClockDivision = TIM_CKD_DIV1;            // 不分频
@@ -404,7 +407,7 @@ static void Ultrasonic_Timer_Init(void)
 /**
  * @brief 回波引脚 + 外部中断初始化
  * @note 引脚：PC0 浮空输入
- *       中断：EXTI0 双边沿触发(上升沿+下降沿)，用于采集完整回波脉冲宽度
+ *       中断：EXTI0 双边沿触发，上升沿、下降沿，用于采集完整回波脉冲宽度
  *       双边沿触发原因：需要同时获取上升沿和下降沿时间，才能计算脉冲中心(波峰)
  */
 static void Ultrasonic_Echo_Init(void)
@@ -416,7 +419,7 @@ static void Ultrasonic_Echo_Init(void)
     RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOC, ENABLE);    // 使能GPIOC时钟
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_SYSCFG, ENABLE);  // 使能SYSCFG(外部中断映射)
 
-    // PC0 配置为浮空输入 (由外部超声波模块驱动)
+    // PC0 配置为浮空输入(由外部超声波模块驱动)
     GPIO_StructInit(&gpio_init);
     gpio_init.GPIO_Pin = GPIO_Pin_0;
     gpio_init.GPIO_Mode = GPIO_Mode_IN;
@@ -430,7 +433,7 @@ static void Ultrasonic_Echo_Init(void)
     EXTI_StructInit(&exti_init);
     exti_init.EXTI_Line = EXTI_Line0;
     exti_init.EXTI_Mode = EXTI_Mode_Interrupt;
-    exti_init.EXTI_Trigger = EXTI_Trigger_Rising_Falling;  // 上升沿+下降沿都触发
+    exti_init.EXTI_Trigger = EXTI_Trigger_Rising_Falling;  // 上升沿、下降沿都触发
     exti_init.EXTI_LineCmd = ENABLE;
     EXTI_Init(&exti_init);
     EXTI_ClearITPendingBit(EXTI_Line0); // 清除初始中断标记
@@ -445,8 +448,8 @@ static void Ultrasonic_Echo_Init(void)
 
 /**
  * @brief 设置PGA112程控放大器增益档位
- * @param gain_code 增益编码(0~7)，对应 1,2,4,8,16,32,64,128倍
- * @note 切换增益后设置 g_gain_settle_discard 标记，丢弃首次测量值等待电路稳定
+ * @param gain_code 增益编码(0~7)，对应1,2,4,8,16,32,64,128倍
+ * @note 切换增益后设置g_gain_settle_discard 标记，丢弃首次测量值等待电路稳定
  */
 static void Ultrasonic_ApplyGain(uint8_t gain_code)
 {
@@ -462,7 +465,7 @@ static void Ultrasonic_ApplyGain(uint8_t gain_code)
 /**
  * @brief 根据历史回波时间(距离)自适应选择增益档位
  * @note 原理：超声波远距离信号衰减严重，距离越远，所需放大倍数越大
- *       根据经验阈值划分8档，保证回波信号幅度适中
+ *       根据经验阈值划分档位，保证回波信号幅度适中
  * @param echo_us 历史回波时间 (us)
  * @return PGA增益编码 (0~7)
  */
@@ -479,11 +482,11 @@ static uint8_t Ultrasonic_SelectGainCode(uint32_t echo_us)
 }
 
 /**
- * @brief 计算回波脉冲中心点(波峰)时间
+ * @brief 计算回波脉冲中心(波峰)时间
  * @note 原理：超声波回波经过检波后输出为方波，信号能量峰值出现在方波中心
  *       使用中心时刻替代边沿，可提升测距精度，减小脉宽带来的误差
- * @param rise_us 上升沿时间 (us)
- * @param fall_us 下降沿时间 (us)
+ * @param rise_us 上升沿时间(us)
+ * @param fall_us 下降沿时间(us)
  * @return 波峰对应的微秒时间
  */
 static uint32_t Ultrasonic_EstimatePeakTime(uint32_t rise_us, uint32_t fall_us)
@@ -505,30 +508,39 @@ static uint32_t Ultrasonic_EstimatePeakTime(uint32_t rise_us, uint32_t fall_us)
  */
 static void Ultrasonic_PrepareGain(uint8_t retry_count)
 {
-    // 基于上一次有效距离选择基础增益
-    uint8_t gain_code = Ultrasonic_SelectGainCode(g_last_echo_us);
+    uint8_t gain_code;
 
     // 连续测量失败，逐级增加增益 (每次失败提升一档)
     if(retry_count > ULTRASONIC_GAIN_RETRY_MAX)
     {
         retry_count = ULTRASONIC_GAIN_RETRY_MAX;
     }
+
+    if((g_tracking_valid != 0U) && (g_reacquire_ignore_near == 0U))
+    {
+        gain_code = Ultrasonic_SelectGainCode(g_last_echo_us);
+    }
+    else
+    {
+        gain_code = ULTRASONIC_SEARCH_BASE_GAIN;
+    }
     gain_code = (uint8_t)(gain_code + retry_count);
 
-    if(gain_code > PGA112_GAIN_128)
+    if((g_tracking_valid == 0U) || (g_reacquire_ignore_near != 0U))
+    {
+        if(gain_code > ULTRASONIC_SEARCH_MAX_GAIN)
+        {
+            gain_code = ULTRASONIC_SEARCH_MAX_GAIN;
+        }
+    }
+    else if(gain_code > PGA112_GAIN_128)
     {
         gain_code = PGA112_GAIN_128; // 限制最大增益
     }
     Ultrasonic_ApplyGain(gain_code);
-    delay_us(20); // 等待SPI配置+运放电路稳定 (约20us)
+    delay_us(20); // 等待SPI配置+运放电路稳定 (20us)
 }
 
-/**
- * @brief 设置回波有效接收时间窗口，过滤窗口外干扰信号
- * @param min_us 窗口下限 (us)
- * @param max_us 窗口上限 (us)
- * @note 若参数无效则恢复全范围窗口
- */
 static void Ultrasonic_SetAcceptWindow(uint32_t min_us, uint32_t max_us)
 {
     if(max_us <= min_us)
@@ -550,7 +562,7 @@ static void Ultrasonic_SetTrackingWindow(void)
     const uint32_t margin_us = ULTRASONIC_TRACK_MARGIN_US;
     if(g_reacquire_ignore_near != 0U)
     {
-        // 重搜索模式：屏蔽近距离 (避开盲区)，从最小有效远距离开始搜索
+        // 重搜索模式：屏蔽近距离(避开盲区)，从最小有效远距离开始搜索
         Ultrasonic_SetAcceptWindow(ULTRASONIC_REACQUIRE_MIN_US, ULTRASONIC_TIMEOUT_US);
     }
     else if(g_tracking_valid == 0U)
@@ -571,10 +583,10 @@ static void Ultrasonic_SetTrackingWindow(void)
 }
 
 /**
- * @brief 单次超声波发射+回波采集 (物理层)
- * @param echo_us 输出：本次回波时间 (us)
+ * @brief 单次超声波发射回波采集 (物理层)
+ * @param echo_us 输出：本次回波时间(us)
  * @return 1=采集成功 0=超时失败
- * @note 阻塞轮询等待回波，超时时间 ULTRASONIC_TIMEOUT_US
+ * @note 阻塞轮询等待回波，超时时间ULTRASONIC_TIMEOUT_US
  */
 static uint8_t Ultrasonic_MeasureOnce(uint32_t *echo_us)
 {
@@ -587,7 +599,7 @@ static uint8_t Ultrasonic_MeasureOnce(uint32_t *echo_us)
     g_echo_fall_us = 0;
     g_echo_rise_seen = 0;
 
-    // 2. 清空定时器计数值 + 清除中断挂起 (确保从0开始计时)
+    // 2. 清空定时器计数器 + 清除中断挂起 (确保从零开始计时)
     TIM_SetCounter(TIM5, 0);
     EXTI_ClearITPendingBit(EXTI_Line0);
 
@@ -612,27 +624,27 @@ static uint8_t Ultrasonic_MeasureOnce(uint32_t *echo_us)
 }
 
 /**
- * @brief 带多级滤波的批量测量：采样+增益自适应+聚类降噪
- * @param echo_us 输出最终有效回波时间 (us)
+ * @brief 带多级滤波的批量测量：采集+增益自适应+聚类降噪
+ * @param echo_us 输出最终有效回波时间(us)
  * @return 1=采样成功 0=全部失败
  * @note 算法流程：
  *       1. 自适应增益调整
  *       2. 连续采集 ULTRASONIC_FILTER_SAMPLES 个有效样本
  *       3. 插入排序
- *       4. 查找最密集样本簇 (容忍 ±90us 波动)
+ *       4. 查找最密集样本簇(容忍 ±90us 波动)
  *       5. 取中位数作为最终结果
  */
 static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us)
 {
     uint32_t samples[ULTRASONIC_FILTER_SAMPLES]; // 采样缓冲区
     uint8_t valid_count = 0;                     // 有效样本计数
-    uint8_t attempts = 0;                        // 总发射次数 (防止死循环)
+    uint8_t attempts = 0;                        // 总发射次数(防止死循环)
     uint8_t gain_retry = 0;                      // 增益重试计数
     uint8_t miss_count = 0;                      // 连续丢失回波计数
     uint8_t index;
     uint32_t reacquire_min_us = ULTRASONIC_REACQUIRE_MIN_US;
 
-    // 校准数据有效时，使用第一个校准点时间作为重搜索下限 (精度更高)
+    // 校准数据有效时，使用第一个校准点时间作为重搜索下限(精度更高)
     if((g_calib_valid != 0U) && (g_calib.point_us[0] > reacquire_min_us))
     {
         reacquire_min_us = g_calib.point_us[0];
@@ -642,7 +654,7 @@ static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us)
     while(attempts < (ULTRASONIC_FILTER_SAMPLES + 20U) && valid_count < ULTRASONIC_FILTER_SAMPLES)
     {
         uint32_t sample = 0;
-        Ultrasonic_PrepareGain(gain_retry); // 动态配置增益 (根据上次结果和失败次数)
+        Ultrasonic_PrepareGain(gain_retry); // 动态配置增益(根据上次结果和失败次数)
         attempts++;
 
         if(Ultrasonic_MeasureOnce(&sample) != 0U)
@@ -651,17 +663,16 @@ static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us)
             if(g_gain_settle_discard != 0U)
             {
                 g_gain_settle_discard = 0;
-                delay_ms(8);
+                delay_ms(ULTRASONIC_BURST_INTERVAL_MS);
                 continue;
             }
-            // 重搜索模式下屏蔽近距离干扰 (避开盲区)
+            // 重搜索模式下屏蔽近距离干扰(避开盲区)
             if((g_reacquire_ignore_near != 0U) && (sample < reacquire_min_us))
             {
                 continue;
             }
             // 存入有效样本
             samples[valid_count++] = sample;
-            g_last_echo_us = sample;         // 更新历史值
             gain_retry = 0;                  // 成功则清空重试计数
             miss_count = 0;
             g_reacquire_ignore_near = 0U;    // 成功采集后退出重搜索模式
@@ -691,14 +702,13 @@ static uint8_t Ultrasonic_MeasureFiltered(uint32_t *echo_us)
                         miss_count = 0U;
                         g_tracking_valid = 0U;
                         g_reacquire_ignore_near = 1U;
-                        g_last_echo_us = ULTRASONIC_TIMEOUT_US;
-                        gain_retry = ULTRASONIC_GAIN_RETRY_MAX;
+                        gain_retry = 0U;
                         Ultrasonic_SetAcceptWindow(reacquire_min_us, ULTRASONIC_TIMEOUT_US);
                     }
                 }
             }
         }
-        delay_ms(8); // 降低发射占空比，防止声波叠加形成杂波干扰
+        delay_ms(ULTRASONIC_BURST_INTERVAL_MS); // 降低发射占空比，防止声波叠加形成杂波干扰
     }
 
     if(valid_count == 0U)
@@ -802,7 +812,7 @@ static void Calibration_Load(void)
 static uint8_t Calibration_IsValid(const UltrasonicCalibData *calib)
 {
     uint8_t index;
-    // 1. 魔术字+版本校验 (防止读取到随机Flash内容)
+    // 1. 魔术字、版本校验 (防止读取到随机Flash内容)
     if(calib->magic != ULTRASONIC_FLASH_MAGIC || calib->version != ULTRASONIC_FLASH_VERSION)
     {
         return 0;
@@ -826,7 +836,7 @@ static uint8_t Calibration_IsValid(const UltrasonicCalibData *calib)
  * @brief 将校准数据写入Flash Sector11
  * @param calib 待写入校准结构体
  * @return 1=写入成功 0=失败
- * @note Flash特性：只能擦除(写1)和编程(写0)，不能单独修改字节；擦除按扇区操作
+ * @note Flash特性：只能擦除(置1)和编程(置0)，不能单独修改字节；擦除按扇区操作
  *       Sector11大小128KB，地址范围 0x080E0000 - 0x080FFFFF
  */
 static uint8_t Calibration_Save(const UltrasonicCalibData *calib)
@@ -841,11 +851,11 @@ static uint8_t Calibration_Save(const UltrasonicCalibData *calib)
     FLASH_ClearFlag(FLASH_FLAG_EOP | FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR |
                     FLASH_FLAG_PGAERR | FLASH_FLAG_PGPERR | FLASH_FLAG_PGSERR);
 
-    // 整扇区擦除 (所有位变为1)
+    // 整扇区擦除(所有位变为1)
     status = FLASH_EraseSector(FLASH_Sector_11, VoltageRange_3);
     if(status == FLASH_COMPLETE)
     {
-        // 按32bit字逐字写入 (结构体大小32字节，共8个字)
+        // 32bit字逐字写入 (结构体大小32字节，共8个字)
         for(index = 0; index < (sizeof(UltrasonicCalibData) / 4U); index++)
         {
             status = FLASH_ProgramWord(address, words[index]);
@@ -892,7 +902,7 @@ static void Calibration_SetMeasureWindow(uint16_t distance_mm)
 }
 
 /**
- * @brief 无校准数据时，使用理想物理公式计算距离 (兜底方案)
+ * @brief 无校准数据时，使用理想物理公式计算距离(兜底方案)
  * @param echo_us 回波时间(us)
  * @return 距离(mm)
  * @note 理论公式：距离(mm) = 时间(us) * 0.1715
@@ -901,18 +911,18 @@ static void Calibration_SetMeasureWindow(uint16_t distance_mm)
 static float Convert_Time_To_Distance_Default(uint32_t echo_us)
 {
     float distance = (float)echo_us * 0.164866f;
-    // 限幅到量程范围 10mm ~ 1300mm
+    // 限幅到量程范围10mm ~ 1300mm
     if(distance < 10.0f) distance = 10.0f;
     if(distance > 1300.0f) distance = 1300.0f;
     return distance;
 }
 
 /**
- * @brief 分段线性插值距离转换 (使用校准数据，修正系统误差)
+ * @brief 分段线性插值距离转换(使用校准数据，修正系统误差)
  * @param echo_us 回波时间(us)
  * @return 修正后距离(mm)
  * @note 原理：将全量程分为多段直线，用标定点拟合非线性误差
- *       本例使用5个标定点，分成4段直线，两点式插值
+ *       本例使用5个标定点，分4段直线，两点式插值
  */
 static float Convert_Time_To_Distance(uint32_t echo_us)
 {
@@ -943,7 +953,7 @@ static float Convert_Time_To_Distance(uint32_t echo_us)
         return Convert_Time_To_Distance_Default(echo_us);
     }
 
-    // 两点式直线插值: y = y0 + (x - x0)*(y1 - y0)/(x1 - x0)
+    // 两点式直线插值 y = y0 + (x - x0)*(y1 - y0)/(x1 - x0)
     distance = y0 + ((float)echo_us - x0) * (y1 - y0) / (x1 - x0);
 
     // 限幅到有效量程
@@ -952,7 +962,7 @@ static float Convert_Time_To_Distance(uint32_t echo_us)
     return distance;
 }
 
-/************************* 菜单交互业务层 *************************/
+/************************* 菜单交互业务逻辑 *************************/
 /**
  * @brief 手动测量界面业务逻辑
  * @note 按下一次Enter执行一次滤波测距，显示时间、距离、校准状态、增益等信息
@@ -1013,7 +1023,7 @@ static void MenuHandler_Measure(void)
                 sprintf(value_text, "%06.1f", (double)Convert_Time_To_Distance_Default(echo_us));
                 Show_Text_Value_Only(2, value_text);
 
-                Show_Text_Value_Only(3, (g_calib_valid != 0U) ? "已校准  " : "未校准  ");
+                Show_Text_Value_Only(3, (g_calib_valid != 0U) ? "已校准 " : "未校准 ");
                 sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
                 Show_Text_Value_Only(4, value_text);
                 Show_Text_Value_Only(5, "测量完成  ");
@@ -1026,7 +1036,7 @@ static void MenuHandler_Measure(void)
                 Show_Text_Value_Only(3, "测量失败  ");
                 sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
                 Show_Text_Value_Only(4, value_text);
-                Show_Text_Value_Only(5, "检查探头  ");
+                Show_Text_Value_Only(5, "检查探头 ");
             }
             Wait_Ps2KeyRelease(KeyValue_Enter);
         }
@@ -1070,7 +1080,7 @@ static void MenuHandler_Calibrate(void)
     OS_String_Show(280, 270, 24, 1, "600mm(us)");
     OS_String_Show(280, 300, 24, 1, "900mm(us)");
     OS_String_Show(280, 330, 24, 1, "1300mm(us)");
-    OS_String_Show(280, 360, 24, 1, "当前测量值(us)");
+    OS_String_Show(280, 360, 24, 1, "当前测量(us)");
     OS_String_Show(280, 390, 24, 1, "校准结果");
     Show_Text_Value_Only(1, "等待校准");
     Show_Text_Value_Only(2, "00000"); Show_Text_Value_Only(3, "00000");
@@ -1104,7 +1114,7 @@ static void MenuHandler_Calibrate(void)
                 Show_Text_Value_Only(1, "采样完成");
                 step++;
 
-                if(step >= 5U) // 5个点位全部采集完成
+                if(step >= 5U) // 5个点位全部采集完毕
                 {
                     uint8_t valid_ok = Calibration_IsValid(&new_calib);
                     uint8_t save_ok = 0U;
@@ -1149,7 +1159,6 @@ static void MenuHandler_Calibrate(void)
     Ultrasonic_SetAcceptWindow(0, ULTRASONIC_TIMEOUT_US);
     Change_Menu(0);
 }
-
 /**
  * @brief 系统状态查看菜单处理函数
  * @details 展示校准有效性、5个校准点原始时间值、当前增益
@@ -1160,7 +1169,7 @@ static void MenuHandler_Status(void)
     char value_text[24];
 
     Draw_Work_Title("实时测量");
-    Draw_Key_Tips("自动测量中", "返回: 退出");
+    Draw_Key_Tips("自动测量", "返回: 退出");
 
     g_tracking_valid = 0;
     g_reacquire_ignore_near = 0U;
@@ -1176,9 +1185,9 @@ static void MenuHandler_Status(void)
     Show_Text_Value_Only(0, "-----   ");
     Show_Text_Value_Only(1, "------  ");
     Show_Text_Value_Only(2, "------  ");
-    Show_Text_Value_Only(3, (g_calib_valid != 0U) ? "已校准   " : "未校准   ");
+    Show_Text_Value_Only(3, (g_calib_valid != 0U) ? "已校准  " : "未校准  ");
     Show_Text_Value_Only(4, "008     ");
-    Show_Text_Value_Only(5, "运行中   ");
+    Show_Text_Value_Only(5, "运行中  ");
 
     while(Ps2KeyValue != KeyValue_Back)
     {
@@ -1199,7 +1208,7 @@ static void MenuHandler_Status(void)
             sprintf(value_text, "%06.1f  ", (double)Convert_Time_To_Distance_Default(echo_us));
             Show_Text_Value_Only(2, value_text);
 
-            Show_Text_Value_Only(3, (g_calib_valid != 0U) ? "已校准   " : "未校准   ");
+            Show_Text_Value_Only(3, (g_calib_valid != 0U) ? "已校准  " : "未校准  ");
             sprintf(value_text, "%03u     ", PGA112_GetGainValue(g_ultrasonic_gain_code));
             Show_Text_Value_Only(4, value_text);
             Show_Text_Value_Only(5, "正常     ");
@@ -1241,7 +1250,7 @@ static void MenuHandler_PGA_Test(void)
     Ultrasonic_PWM_OutputEnable();                     // 开启超声波PWM输出
     Ultrasonic_ApplyGain(gain_codes[gain_index]);      // 加载初始增益
 
-    // 界面标题、按键提示、固定文本
+    // 界面标题、按键提示、固定文字
     Draw_Work_Title("程控增益调节");
     Draw_Key_Tips("+/-调节增益", "Back返回并关闭PWM");
     OS_String_Show(280, 150, 24, 1, "PWM输出状态");
@@ -1277,7 +1286,7 @@ static void MenuHandler_PGA_Test(void)
                 Ultrasonic_ApplyGain(gain_codes[gain_index]); // 设置新增益
                 sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
                 Show_Text_Value_Only(4, value_text);
-                Show_Text_Value_Only(7, "增益已调大");
+                Show_Text_Value_Only(7, "增益已调节");
             }
             else
             {
@@ -1294,7 +1303,7 @@ static void MenuHandler_PGA_Test(void)
                 Ultrasonic_ApplyGain(gain_codes[gain_index]); // 设置新增益
                 sprintf(value_text, "%03u", PGA112_GetGainValue(g_ultrasonic_gain_code));
                 Show_Text_Value_Only(4, value_text);
-                Show_Text_Value_Only(7, "增益已调小");
+                Show_Text_Value_Only(7, "增益已调节");
             }
             else
             {
@@ -1313,13 +1322,13 @@ static void MenuHandler_PGA_Test(void)
 
 /**
  * @brief EXTI0 外部中断服务函数
- * @note 回波信号(PC0)边沿触发中断，采用**状态机**采集超声波回波时序
+ * @note 回波信号(PC0)边沿触发中断，采用状态机采集超声波回波时间
  * @流程 盲区过滤 → 采集上升沿 → 采集下降沿 → 脉冲合法性校验 → 标记采集完成
  * @attention 该中断优先级较高，需快速处理，避免阻塞其他中断
  */
 void EXTI0_IRQHandler(void)
 {
-    // 判断是否为 EXTI_Line0 中断触发
+    // 判断是否为EXTI_Line0 中断触发
     if(EXTI_GetITStatus(EXTI_Line0) != RESET)
     {
         // 仅在测量窗口开启时响应回波信号，屏蔽杂波干扰
@@ -1345,7 +1354,7 @@ void EXTI0_IRQHandler(void)
                 else if(g_echo_rise_seen != 0U && now > g_echo_rise_us)
                 {
                     g_echo_fall_us = now;  // 保存下降沿时间戳
-                    // 计算回波峰值等效时间(取脉冲中心)
+                    // 计算回波峰值等效时间，取脉冲中心
                     g_echo_time_us = Ultrasonic_EstimatePeakTime(g_echo_rise_us, g_echo_fall_us);
 
                     // 多重合法性校验：时间范围、脉冲宽度、窗口范围，过滤毛刺/干扰
@@ -1354,7 +1363,7 @@ void EXTI0_IRQHandler(void)
                        (g_echo_time_us >= g_echo_accept_min_us) &&
                        (g_echo_time_us <= g_echo_accept_max_us))
                     {
-                        g_echo_captured = 1U;    // 标记采集完成，主循环可取数
+                        g_echo_captured = 1U;    // 标记采集完成，主循环可读取
                         g_measure_active = 0U;   // 关闭本次测量窗口，停止接收中断
                     }
                     // 校验失败：清空状态，等待下一次回波

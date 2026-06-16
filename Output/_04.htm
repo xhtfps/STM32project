@@ -3,7 +3,7 @@
 <title>Static Call Graph - [.\Output\_04.axf]</title></head>
 <body><HR>
 <H1>Static Call Graph for image .\Output\_04.axf</H1><HR>
-<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 5060528: Last Updated: Mon Jun 15 20:45:07 2026
+<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 5060528: Last Updated: Tue Jun 16 14:20:10 2026
 <BR><P>
 <H3>Maximum Stack Usage =        432 bytes + Unknown(Functions without stacksize, Cycles, Untraceable Function Pointers)</H3><H3>
 Call chain for Maximum Stack Depth:</H3>
@@ -2137,8 +2137,8 @@ Local Symbols
 <BR><BR>[Called By]<UL><LI><a href="#[14]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;EXTI0_IRQHandler
 </UL>
 
-<P><STRONG><a name="[d4]"></a>Ultrasonic_MeasureFiltered</STRONG> (Thumb, 404 bytes, Stack size 200 bytes, user.o(i.Ultrasonic_MeasureFiltered))
-<BR><BR>[Stack]<UL><LI>Max Depth = 312 + Unknown Stack Size
+<P><STRONG><a name="[d4]"></a>Ultrasonic_MeasureFiltered</STRONG> (Thumb, 392 bytes, Stack size 72 bytes, user.o(i.Ultrasonic_MeasureFiltered))
+<BR><BR>[Stack]<UL><LI>Max Depth = 184 + Unknown Stack Size
 <LI>Call Chain = Ultrasonic_MeasureFiltered &rArr; Ultrasonic_PrepareGain &rArr; Ultrasonic_ApplyGain &rArr; PGA112_SetGainCode &rArr; PGA112_WriteConfig &rArr; User_SPI_Write16 &rArr; User_SPI_Transfer16 &rArr; delay_us &rArr; OS_SchedUnlock
 </UL>
 <BR>[Calls]<UL><LI><a href="#[d5]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;delay_ms
@@ -2164,7 +2164,7 @@ Local Symbols
 <BR>[Called By]<UL><LI><a href="#[d4]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Ultrasonic_MeasureFiltered
 </UL>
 
-<P><STRONG><a name="[11d]"></a>Ultrasonic_PrepareGain</STRONG> (Thumb, 44 bytes, Stack size 16 bytes, user.o(i.Ultrasonic_PrepareGain))
+<P><STRONG><a name="[11d]"></a>Ultrasonic_PrepareGain</STRONG> (Thumb, 80 bytes, Stack size 16 bytes, user.o(i.Ultrasonic_PrepareGain))
 <BR><BR>[Stack]<UL><LI>Max Depth = 112 + Unknown Stack Size
 <LI>Call Chain = Ultrasonic_PrepareGain &rArr; Ultrasonic_ApplyGain &rArr; PGA112_SetGainCode &rArr; PGA112_WriteConfig &rArr; User_SPI_Write16 &rArr; User_SPI_Transfer16 &rArr; delay_us &rArr; OS_SchedUnlock
 </UL>
